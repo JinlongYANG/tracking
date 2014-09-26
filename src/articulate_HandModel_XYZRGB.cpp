@@ -461,10 +461,10 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_min[5] = -180;
     parameters_max[5] = 180;
 
-    parameters_min[6] = 0;
-    parameters_max[6] = 80;
-    parameters_min[7] = -20;
-    parameters_max[7] = 30;
+    parameters_min[6] = -10;
+    parameters_max[6] = 60;
+    parameters_min[7] = 0;
+    parameters_max[7] = 60;
     parameters_min[8] = -10;
     parameters_max[8] = 70;
     parameters_min[9] = -10;
@@ -489,7 +489,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_max[17] = 80;
 
     parameters_min[18] = -20;
-    parameters_max[18] = 10;
+    parameters_max[18] = 5;
     parameters_min[19] = -60;
     parameters_max[19] = 30;
     parameters_min[20] = -5;

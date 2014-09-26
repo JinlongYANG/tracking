@@ -35,6 +35,8 @@
 //#include "tracking/tracking_Config.h"
 #include <leap_msgs/Leap.h>
 #include <cstdio>
+#include <functional>   // std::minus, std::divides
+#include <numeric>      // std::inner_product
 
 #include "GCoptimization/GCoptimization.h"
 
@@ -539,6 +541,40 @@ public:
             }
         }
     }
+
+    void Score(const Mat Ober, const Mat Hypo, const int backgroud_value, float &overlap, float &overlap_obs, float &overlap_hyp, float &overall_diff, float &overlap_diff, float &overlap_diff_dev){
+
+        overlap = 0;
+        overall_diff = 0;
+        overlap_diff = 0;
+        overlap_obs = 0;
+        overlap_hyp = 0;
+        vector<float> v;
+        for( int row = 0; row < Ober.rows; ++row){
+            for( int col = 0; col < Ober.cols; ++col){
+                overall_diff += abs(Ober.at<unsigned char>(row, col) - Hypo.at<unsigned char>(row, col));
+                if( Ober.at<unsigned char>(row, col) != backgroud_value){
+                    overlap_obs++;
+                    if(Hypo.at<unsigned char>(row, col) != backgroud_value){
+                        overlap++;
+                        float a = abs(Ober.at<unsigned char>(row, col) - Hypo.at<unsigned char>(row, col));
+                        overlap_diff += a;
+                        v.push_back(a);
+                    }
+                }
+                if(Hypo.at<unsigned char>(row, col) != backgroud_value){
+                    overlap_hyp++;
+                }
+            }
+        }
+        std::vector<double> diff(v.size());
+        std::transform(v.begin(), v.end(), diff.begin(),
+                       std::bind2nd(std::minus<double>(), overlap_diff/overlap));
+        double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+        overlap_diff_dev = std::sqrt(sq_sum / v.size());
+    }
+
+
     /////////////////     end of Score (similarity assessment)     /////////////////
 
 
