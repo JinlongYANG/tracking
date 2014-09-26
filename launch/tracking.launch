@@ -1,0 +1,7 @@
+<launch>
+	
+    	<node pkg="rosbag" type="play" name="player" args="-r 1 -l /home/jinlong/bagfiles/simplest_new.bag"/>
+	<node name="finger_tracking" pkg="finger_tracking" type="finger_tracking"  />
+	<node name="rviz" pkg="rviz" type="rviz"  />
+
+</launch>
