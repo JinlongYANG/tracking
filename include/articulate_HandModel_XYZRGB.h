@@ -125,7 +125,8 @@ public:
     float bone_length[5][4];
     pcl::PointXYZRGB joints_position[26];
     Mat Model_joints[26];
-    Mat virtual_joints[5];
+    Mat auxiliary_palm_position[10];
+    Mat auxiliary_palm_position_now[10];
     Mat palm_model;
     vector< pcl::PointCloud<pcl::PointXYZRGB> > handPointCloudVector;
 
@@ -136,6 +137,7 @@ public:
     void set_parameters(float para[26]);
     void get_joints_positions();
     void get_handPointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud);
+    void samplePointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud);
 
 
 private:

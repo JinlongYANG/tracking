@@ -2,6 +2,7 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
+#include <omp.h>
 
 #define PI 3.14159265
 
@@ -40,53 +41,61 @@ Mat R_z(float theta){
     return Rz;
 }
 
-float Distance(pcl::PointXYZRGB p1, pcl::PointXYZRGB p2){
-    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
+double Distance(pcl::PointXYZRGB p1, pcl::PointXYZRGB p2){
+    double dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
     if (dis == 0)
-        return 0.00000001;
+        return 0.00000000001;
     else
         return dis;
 }
 
-float Distance(pcl::PointXYZ p1, Mat p2){
-    float dis = sqrt((p1.x-p2.at<float>(0,0))*(p1.x-p2.at<float>(0,0))+(p1.y-p2.at<float>(1,0))*(p1.y-p2.at<float>(1,0))+(p1.z-p2.at<float>(2,0))*(p1.z-p2.at<float>(2,0)));
-    if (dis == 0)
-        return 0.00000001;
+double Length(Point3d p){
+    double length = sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
+    if (length == 0)
+        return 0.00000000001;
     else
-        return dis;
+        return length;
 }
 
-float Distance(pcl::PointXYZ p1, pcl::PointXYZRGB p2){
-    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
-    if (dis == 0)
-        return 0.00000001;
-    else
-        return dis;
-}
+//float Distance(pcl::PointXYZ p1, Mat p2){
+//    float dis = sqrt((p1.x-p2.at<float>(0,0))*(p1.x-p2.at<float>(0,0))+(p1.y-p2.at<float>(1,0))*(p1.y-p2.at<float>(1,0))+(p1.z-p2.at<float>(2,0))*(p1.z-p2.at<float>(2,0)));
+//    if (dis == 0)
+//        return 0.00000001;
+//    else
+//        return dis;
+//}
 
-float Distance(pcl::PointXYZ p1, pcl::PointXYZ p2){
-    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
-    if (dis == 0)
-        return 0.00000001;
-    else
-        return dis;
-}
+//float Distance(pcl::PointXYZ p1, pcl::PointXYZRGB p2){
+//    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
+//    if (dis == 0)
+//        return 0.00000001;
+//    else
+//        return dis;
+//}
 
-float Distance(Point3d p1, Point3d p2){
-    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
-    if (dis == 0)
-        return 0.00000001;
-    else
-        return dis;
-}
+//float Distance(pcl::PointXYZ p1, pcl::PointXYZ p2){
+//    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
+//    if (dis == 0)
+//        return 0.00000001;
+//    else
+//        return dis;
+//}
 
-float Distance(pcl::PointXYZ p1, Point3d p2){
-    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
-    if (dis == 0)
-        return 0.00000001;
-    else
-        return dis;
-}
+//float Distance(Point3d p1, Point3d p2){
+//    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
+//    if (dis == 0)
+//        return 0.00000001;
+//    else
+//        return dis;
+//}
+
+//float Distance(pcl::PointXYZ p1, Point3d p2){
+//    float dis = sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z));
+//    if (dis == 0)
+//        return 0.00000001;
+//    else
+//        return dis;
+//}
 
 float arc2degree(float arc){
     return 180.0*arc/PI;
@@ -151,64 +160,91 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     //3.1. palm joints: 1,6,11,16,21,7,12,17,22
     //palm joints with reference to palm/hand coordinate:
     //palm.thumb
+    float delt_y = 0.002;
     Model_joints[1].at<float>(0,0) = -0.014 - 0.002;
-    Model_joints[1].at<float>(1,0) = -0.053;
+    Model_joints[1].at<float>(1,0) = -0.053 + delt_y;
     Model_joints[1].at<float>(2,0) = 0.002;
     //palm.index
     Model_joints[6].at<float>(0,0) = -0.014 - 0.002;
-    Model_joints[6].at<float>(1,0) = -0.053;
+    Model_joints[6].at<float>(1,0) = -0.053 + delt_y;
     Model_joints[6].at<float>(2,0) = -0.008;
 
     Model_joints[7].at<float>(0,0) = -0.024 - 0.002;
-    Model_joints[7].at<float>(1,0) = 0.019;
+    Model_joints[7].at<float>(1,0) = 0.019 + delt_y;
     Model_joints[7].at<float>(2,0) = 0;
     //palm.middle
     Model_joints[11].at<float>(0,0) = 0 - 0.002;
-    Model_joints[11].at<float>(1,0) = -0.05;
+    Model_joints[11].at<float>(1,0) = -0.05 + delt_y;
     Model_joints[11].at<float>(2,0) = -0.008;
 
     Model_joints[12].at<float>(0,0) = -0.002 - 0.002;
-    Model_joints[12].at<float>(1,0) = 0.023;
+    Model_joints[12].at<float>(1,0) = 0.023 + delt_y;
     Model_joints[12].at<float>(2,0) = -0.001;
     //palm.ring
     Model_joints[16].at<float>(0,0) = 0.014 - 0.002;
-    Model_joints[16].at<float>(1,0) = -0.051;
+    Model_joints[16].at<float>(1,0) = -0.051 + delt_y;
     Model_joints[16].at<float>(2,0) = -0.008;
 
     Model_joints[17].at<float>(0,0) = 0.020 - 0.002;
-    Model_joints[17].at<float>(1,0) = 0.018;
+    Model_joints[17].at<float>(1,0) = 0.018 + delt_y;
     Model_joints[17].at<float>(2,0) = 0.001;
     //palm.pinky
     Model_joints[21].at<float>(0,0) = 0.027 - 0.002;
-    Model_joints[21].at<float>(1,0) = -0.053;
+    Model_joints[21].at<float>(1,0) = -0.053 + delt_y;
     Model_joints[21].at<float>(2,0) = -0.004;
 
     Model_joints[22].at<float>(0,0) = 0.042 - 0.002;
-    Model_joints[22].at<float>(1,0) = 0.013;
+    Model_joints[22].at<float>(1,0) = 0.013 + delt_y;
     Model_joints[22].at<float>(2,0) = 0;
 
-    for(int i = 0; i < 5; i++){
-        virtual_joints[i] = Mat::zeros(3,1,CV_32FC1);
+    for(int i = 0; i < 10; i++){
+        auxiliary_palm_position[i] = Mat::zeros(3,1,CV_32FC1);
     }
 
-    virtual_joints[0] = R_y(70)*Model_joints[1];
+    auxiliary_palm_position[0].at<float>(0,0) = 0;
+    auxiliary_palm_position[0].at<float>(1,0) = 0;
+    auxiliary_palm_position[0].at<float>(2,0) = 0;
 
-    virtual_joints[1].at<float>(0,0) = Model_joints[7].at<float>(0,0);
-    virtual_joints[1].at<float>(1,0) = Model_joints[7].at<float>(1,0);
-    virtual_joints[1].at<float>(2,0) = Model_joints[7].at<float>(2,0) + 0.1;
+    auxiliary_palm_position[1].at<float>(0,0) = 1;
+    auxiliary_palm_position[1].at<float>(1,0) = 0;
+    auxiliary_palm_position[1].at<float>(2,0) = 0;
 
-    virtual_joints[2].at<float>(0,0) = Model_joints[12].at<float>(0,0);
-    virtual_joints[2].at<float>(1,0) = Model_joints[12].at<float>(1,0);
-    virtual_joints[2].at<float>(2,0) = Model_joints[12].at<float>(2,0) + 0.1;
+    auxiliary_palm_position[2].at<float>(0,0) = 0;
+    auxiliary_palm_position[2].at<float>(1,0) = 1;
+    auxiliary_palm_position[2].at<float>(2,0) = 0;
 
-    virtual_joints[3].at<float>(0,0) = Model_joints[17].at<float>(0,0);
-    virtual_joints[3].at<float>(1,0) = Model_joints[17].at<float>(1,0);
-    virtual_joints[3].at<float>(2,0) = Model_joints[17].at<float>(2,0) + 0.1;
+    auxiliary_palm_position[3].at<float>(0,0) = 0;
+    auxiliary_palm_position[3].at<float>(1,0) = 0;
+    auxiliary_palm_position[3].at<float>(2,0) = 1;
 
-    virtual_joints[4].at<float>(0,0) = Model_joints[22].at<float>(0,0);
-    virtual_joints[4].at<float>(1,0) = Model_joints[22].at<float>(1,0);
-    virtual_joints[4].at<float>(2,0) = Model_joints[22].at<float>(2,0) + 0.1;
+    auxiliary_palm_position[4].at<float>(0,0) = Model_joints[21].at<float>(0,0);
+    auxiliary_palm_position[4].at<float>(1,0) = Model_joints[21].at<float>(1,0);
+    auxiliary_palm_position[4].at<float>(2,0) = Model_joints[21].at<float>(2,0) - 0.01;
 
+    auxiliary_palm_position[5].at<float>(0,0) = Model_joints[22].at<float>(0,0);
+    auxiliary_palm_position[5].at<float>(1,0) = Model_joints[22].at<float>(1,0);
+    auxiliary_palm_position[5].at<float>(2,0) = Model_joints[22].at<float>(2,0) - 0.01;
+
+    auxiliary_palm_position[6].at<float>(0,0) = Model_joints[6].at<float>(0,0);
+    auxiliary_palm_position[6].at<float>(1,0) = Model_joints[6].at<float>(1,0);
+    auxiliary_palm_position[6].at<float>(2,0) = Model_joints[6].at<float>(2,0) + 0.01;
+
+    auxiliary_palm_position[7].at<float>(0,0) = Model_joints[7].at<float>(0,0);
+    auxiliary_palm_position[7].at<float>(1,0) = Model_joints[7].at<float>(1,0);
+    auxiliary_palm_position[7].at<float>(2,0) = Model_joints[7].at<float>(2,0) + 0.01;
+
+    auxiliary_palm_position[8].at<float>(0,0) = Model_joints[21].at<float>(0,0);
+    auxiliary_palm_position[8].at<float>(1,0) = Model_joints[21].at<float>(1,0);
+    auxiliary_palm_position[8].at<float>(2,0) = Model_joints[21].at<float>(2,0) + 0.01;
+
+    auxiliary_palm_position[9].at<float>(0,0) = Model_joints[22].at<float>(0,0);
+    auxiliary_palm_position[9].at<float>(1,0) = Model_joints[22].at<float>(1,0);
+    auxiliary_palm_position[9].at<float>(2,0) = Model_joints[22].at<float>(2,0) + 0.01;
+
+
+    for(int i = 0; i< 4; i++){
+        auxiliary_palm_position_now[i] = Mat::zeros(3,1,CV_32FC1);
+    }
     //3.2.fingers:
     //3.2.1 index(extrinsic):
     Model_joints[8].at<float>(1,0) = bone_length[1][1];
@@ -472,7 +508,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
 
     parameters_min[10] = -20;
     parameters_max[10] = 30;
-    parameters_min[11] = -60;
+    parameters_min[11] = -10;
     parameters_max[11] = 30;
     parameters_min[12] = -5;
     parameters_max[12] = 110;
@@ -481,7 +517,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
 
     parameters_min[14] = -20;
     parameters_max[14] = 20;
-    parameters_min[15] = -60;
+    parameters_min[15] = -10;
     parameters_max[15] = 30;
     parameters_min[16] = -5;
     parameters_max[16] = 110;
@@ -490,7 +526,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
 
     parameters_min[18] = -20;
     parameters_max[18] = 5;
-    parameters_min[19] = -60;
+    parameters_min[19] = -10;
     parameters_max[19] = 30;
     parameters_min[20] = -5;
     parameters_max[20] = 110;
@@ -499,7 +535,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
 
     parameters_min[22] = -30;
     parameters_max[22] = 0;
-    parameters_min[23] = -60;
+    parameters_min[23] = -20;
     parameters_max[23] = 30;
     parameters_min[24] = -5;
     parameters_max[24] = 110;
@@ -588,7 +624,6 @@ void articulate_HandModel_XYZRGB::set_parameters(){
     parameters[25] = 30;
 }
 
-
 void articulate_HandModel_XYZRGB::set_parameters(float para[26]){
     for(int i = 0; i<26; i++)
         parameters[i] = para[i];
@@ -675,6 +710,11 @@ void articulate_HandModel_XYZRGB::get_joints_positions(){
         joints_for_calc[i] = R_p_r_y * joints_for_calc[i]+translation;
     }
 
+    //3.1 palm auxiliary points:
+    for(int i = 0; i< 4; i++){
+        auxiliary_palm_position[i].copyTo(auxiliary_palm_position_now[i]);
+        auxiliary_palm_position_now[i] = R_p_r_y * auxiliary_palm_position_now[i]+translation;
+    }
 
 
     //4. put calculation results into joints_position
@@ -698,21 +738,24 @@ void articulate_HandModel_XYZRGB::get_handPointCloud(pcl::PointCloud<pcl::PointX
 
     //index finger to pinky finger point cloud
     pcl::PointXYZRGB temp_p;
-    for(int fingerIndex = 1; fingerIndex<5; ++fingerIndex){
 
+    for(int fingerIndex = 1; fingerIndex<5; ++fingerIndex){
+        Mat R[3];
+        R[0] = R_z(parameters[fingerIndex*4 + 6])*R_x(parameters[fingerIndex*4 + 7]);
+        R[1] = R_x(parameters[fingerIndex*4 + 8]);
+        R[2] = R_x(parameters[fingerIndex*4 + 9]);
         for( int boneIndex = 0; boneIndex < 3; ++boneIndex){
 
             int vectorIndex = fingerIndex*3+1+boneIndex;
             temp_p.rgb = handPointCloudVector[vectorIndex].points[0].rgb;
-            for(size_t i = 0; i < handPointCloudVector[vectorIndex].points.size(); ++i){
+
+            //#pragma omp parallel for
+            for(int i = 0; i < handPointCloudVector[vectorIndex].points.size(); ++i){
                 Mat point4calcu = Mat::zeros(3,1,CV_32FC1);
                 point4calcu.at<float>(0,0) = handPointCloudVector[vectorIndex].points[i].x;
                 point4calcu.at<float>(1,0) = handPointCloudVector[vectorIndex].points[i].y;
                 point4calcu.at<float>(2,0) = handPointCloudVector[vectorIndex].points[i].z;
-                Mat R[3];
-                R[0] = R_z(parameters[fingerIndex*4 + 6])*R_x(parameters[fingerIndex*4 + 7]);
-                R[1] = R_x(parameters[fingerIndex*4 + 8]);
-                R[2] = R_x(parameters[fingerIndex*4 + 9]);
+
                 if(boneIndex == 0)
                     point4calcu = R_p_r_y * (R[0]*point4calcu+Model_joints[fingerIndex*5+2]) + translation;
                 else if (boneIndex ==1){
@@ -734,19 +777,22 @@ void articulate_HandModel_XYZRGB::get_handPointCloud(pcl::PointCloud<pcl::PointX
         }
     }
     //thum point cloud:
+    Mat R[3];
+    R[0] = R_y(70);
+    R[0] = R_z(10+parameters[6])*R_x(parameters[7])*R[0];
+    R[1] = R_x(parameters[8]);
+    R[2] = R_x(parameters[9]);
     for( int boneIndex = 0; boneIndex < 3; ++boneIndex){
         int vectorIndex = boneIndex+1;
         temp_p.rgb = handPointCloudVector[vectorIndex].points[0].rgb;
-        for(size_t i = 0; i < handPointCloudVector[vectorIndex].points.size(); ++i){
+
+#pragma omp parallel for
+        for(int i = 0; i < handPointCloudVector[vectorIndex].points.size(); ++i){
             Mat point4calcu = Mat::zeros(3,1,CV_32FC1);
             point4calcu.at<float>(0,0) = handPointCloudVector[vectorIndex].points[i].x;
             point4calcu.at<float>(1,0) = handPointCloudVector[vectorIndex].points[i].y;
             point4calcu.at<float>(2,0) = handPointCloudVector[vectorIndex].points[i].z;
-            Mat R[3];
-            R[0] = R_y(70);
-            R[0] = R_z(10+parameters[6])*R_x(parameters[7])*R[0];
-            R[1] = R_x(parameters[8]);
-            R[2] = R_x(parameters[9]);
+
             if(boneIndex == 0)
                 point4calcu = R_p_r_y * (R[0]*point4calcu+Model_joints[1]) + translation;
             else if (boneIndex ==1){
@@ -768,7 +814,8 @@ void articulate_HandModel_XYZRGB::get_handPointCloud(pcl::PointCloud<pcl::PointX
     }
     //palm point cloud:
     temp_p.rgb = handPointCloudVector[0].points[0].rgb;
-    for(size_t i = 0; i < handPointCloudVector[0].points.size(); ++i){
+#pragma omp parallel for
+    for(int i = 0; i < handPointCloudVector[0].points.size(); ++i){
         Mat point4calcu = Mat::zeros(3,1,CV_32FC1);
         point4calcu.at<float>(0,0) = handPointCloudVector[0].points[i].x;
         point4calcu.at<float>(1,0) = handPointCloudVector[0].points[i].y;
@@ -795,7 +842,255 @@ void articulate_HandModel_XYZRGB::get_handPointCloud(pcl::PointCloud<pcl::PointX
 
 }
 
+void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud){
+    handPointCloud.clear();
 
+    float xy_resolution = 0.003;
+    float theta_resolution = 15;
+    //1. Fingers:
+    //1.a Thumb:
+    for(int bone_index = 0; bone_index < 3; bone_index++){
+        int jointStart = bone_index+1;
+        int jointEnd = bone_index+2;
+        //1.1 axis of cylinder:
+        Point3d axis_vector;
+        double axis_vector_length = Distance(joints_position[jointEnd], joints_position[jointStart]);
+        axis_vector.x = (joints_position[jointEnd].x - joints_position[jointStart].x)/axis_vector_length;
+        axis_vector.y = (joints_position[jointEnd].y - joints_position[jointStart].y)/axis_vector_length;
+        axis_vector.z = (joints_position[jointEnd].z - joints_position[jointStart].z)/axis_vector_length;
+
+        //1.2 radius vectors:
+        //1.2.1 first radius vector:
+        Point3d radius_vector1;
+        if(axis_vector.x > 0.01 || axis_vector.x < -0.01){
+            radius_vector1.y = 1;
+            radius_vector1.z = 1;
+            radius_vector1.x = -(axis_vector.y + axis_vector.z)/axis_vector.x;
+        }
+        else if(abs(axis_vector.y || axis_vector.y < -0.01) > 0.01){
+            radius_vector1.x = 1;
+            radius_vector1.z = 1;
+            radius_vector1.y = -(axis_vector.x + axis_vector.z)/axis_vector.y;
+        }
+        else if(abs(axis_vector.z || axis_vector.z < -0.01) > 0.01){
+            radius_vector1.x = 1;
+            radius_vector1.y = 1;
+            radius_vector1.z = -(axis_vector.x + axis_vector.y)/axis_vector.z;
+        }
+        else{
+            ROS_INFO("Error in 'articulate_HandModel_XYZRGB' radius vector calculation!");
+        }
+
+        double radius_vector1_length = Length(radius_vector1);
+        radius_vector1.x /= radius_vector1_length;
+        radius_vector1.y /= radius_vector1_length;
+        radius_vector1.z /= radius_vector1_length;
+
+        //std::cout<< " radius vector 1: " << radius_vector1 << std::endl;
+
+        //1.2.2 second radius vector:
+        Point3d radius_vector2;
+        radius_vector2.x = radius_vector1.y*axis_vector.z - radius_vector1.z*axis_vector.y;
+        radius_vector2.y = radius_vector1.z*axis_vector.x - radius_vector1.x*axis_vector.z;
+        radius_vector2.z = radius_vector1.x*axis_vector.y - radius_vector1.y*axis_vector.x;
+
+        //    std::cout<< " axis vector: " << axis_vector << std::endl;
+        //    std::cout<< " radius vector 1: " << radius_vector1 << std::endl;
+        //    std::cout<< " radius vector 2: " << radius_vector2 << std::endl;
+
+        //1.3 sample cylinder:
+        float radius = 0.015;
+
+        pcl::PointXYZRGB p;
+        p.rgb = joints_position[jointEnd].rgb;
+
+        float step = 0;
+
+        while(step < bone_length[0][bone_index+1]){
+            Point3d axis_step;
+            axis_step.x = step * axis_vector.x + joints_position[jointStart].x;
+            axis_step.y = step * axis_vector.y + joints_position[jointStart].y;
+            axis_step.z = step * axis_vector.z + joints_position[jointStart].z;
+
+            if(bone_index == 0)
+                radius = 0.015-0.004/bone_length[0][1]*step;
+            else if (bone_index ==1)
+                radius = 0.011 - 0.002/bone_length[0][2]*step;
+            else
+                radius = 0.009 - 0.001/bone_length[0][3]*step;
+
+            for(int theta = 0; theta < 360; theta += theta_resolution){
+                float cosT = cos(degree2arc(theta));
+                float sinT = sin(degree2arc(theta));
+                p.x = radius*(radius_vector1.x*cosT + radius_vector2.x*sinT) + axis_step.x;
+                p.y = radius*(radius_vector1.y*cosT + radius_vector2.y*sinT) + axis_step.y;
+                p.z = radius*(radius_vector1.z*cosT + radius_vector2.z*sinT) + axis_step.z;
+
+                handPointCloud.push_back(p);
+
+            }
+            step += xy_resolution;
+        }
+    }
+
+    //Fingers from 2 to 5:
+    for(int finger_index = 1; finger_index < 5; finger_index++ ){
+        for(int bone_index = 0; bone_index < 3; bone_index++){
+            int jointStart = 2+5*finger_index + bone_index;
+            int jointEnd = jointStart + 1;
+            //1.1 axis of cylinder:
+            Point3d axis_vector;
+            double axis_vector_length = Distance(joints_position[jointEnd], joints_position[jointStart]);
+            axis_vector.x = (joints_position[jointEnd].x - joints_position[jointStart].x)/axis_vector_length;
+            axis_vector.y = (joints_position[jointEnd].y - joints_position[jointStart].y)/axis_vector_length;
+            axis_vector.z = (joints_position[jointEnd].z - joints_position[jointStart].z)/axis_vector_length;
+
+            //1.2 radius vectors:
+            //1.2.1 first radius vector:
+            Point3d radius_vector1;
+            if(axis_vector.x > 0.01 || axis_vector.x < -0.01){
+                radius_vector1.y = 1;
+                radius_vector1.z = 1;
+                radius_vector1.x = -(axis_vector.y + axis_vector.z)/axis_vector.x;
+            }
+            else if(abs(axis_vector.y || axis_vector.y < -0.01) > 0.01){
+                radius_vector1.x = 1;
+                radius_vector1.z = 1;
+                radius_vector1.y = -(axis_vector.x + axis_vector.z)/axis_vector.y;
+            }
+            else if(abs(axis_vector.z || axis_vector.z < -0.01) > 0.01){
+                radius_vector1.x = 1;
+                radius_vector1.y = 1;
+                radius_vector1.z = -(axis_vector.x + axis_vector.y)/axis_vector.z;
+            }
+            else{
+                ROS_INFO("Error in 'articulate_HandModel_XYZRGB' radius vector calculation!");
+            }
+
+            double radius_vector1_length = Length(radius_vector1);
+            radius_vector1.x /= radius_vector1_length;
+            radius_vector1.y /= radius_vector1_length;
+            radius_vector1.z /= radius_vector1_length;
+
+            //1.2.2 second radius vector:
+            Point3d radius_vector2;
+            radius_vector2.x = radius_vector1.y*axis_vector.z - radius_vector1.z*axis_vector.y;
+            radius_vector2.y = radius_vector1.z*axis_vector.x - radius_vector1.x*axis_vector.z;
+            radius_vector2.z = radius_vector1.x*axis_vector.y - radius_vector1.y*axis_vector.x;
+
+            //    std::cout<< " axis vector: " << axis_vector << std::endl;
+            //    std::cout<< " radius vector 1: " << radius_vector1 << std::endl;
+            //    std::cout<< " radius vector 2: " << radius_vector2 << std::endl;
+
+            //1.3 sample cylinder:
+            float radius = 0.01;
+
+            pcl::PointXYZRGB p;
+            p.rgb = joints_position[jointEnd].rgb;
+
+            float step = 0;
+
+            while(step < bone_length[finger_index][bone_index + 1]){
+                float theta = 0;
+                Point3d axis_step;
+                axis_step.x = step * axis_vector.x + joints_position[jointStart].x;
+                axis_step.y = step * axis_vector.y + joints_position[jointStart].y;
+                axis_step.z = step * axis_vector.z + joints_position[jointStart].z;
+
+                radius = 0.01-(bone_index)*0.001-0.001/bone_length[finger_index][bone_index+1]*step;
+                if(finger_index == 4)
+                    radius -= 0.001;
+                while(theta < 360){
+                    float cosT = cos(degree2arc(theta));
+                    float sinT = sin(degree2arc(theta));
+                    p.x = radius*(radius_vector1.x*cosT + radius_vector2.x*sinT) + axis_step.x;
+                    p.y = radius*(radius_vector1.y*cosT + radius_vector2.y*sinT) + axis_step.y;
+                    p.z = radius*(radius_vector1.z*cosT + radius_vector2.z*sinT) + axis_step.z;
+
+                    handPointCloud.push_back(p);
+
+                    theta += theta_resolution;
+
+                }
+                step += xy_resolution;
+            }
+        }
+    }
+
+
+
+    //2. Palm:
+    Point3d vecX, vecY, vecZ;
+    vecX.x = auxiliary_palm_position_now[1].at<float>(0,0) - auxiliary_palm_position_now[0].at<float>(0,0);
+    vecX.y = auxiliary_palm_position_now[1].at<float>(1,0) - auxiliary_palm_position_now[0].at<float>(1,0);
+    vecX.z = auxiliary_palm_position_now[1].at<float>(2,0) - auxiliary_palm_position_now[0].at<float>(2,0);
+
+    vecY.x = auxiliary_palm_position_now[2].at<float>(0,0) - auxiliary_palm_position_now[0].at<float>(0,0);
+    vecY.y = auxiliary_palm_position_now[2].at<float>(1,0) - auxiliary_palm_position_now[0].at<float>(1,0);
+    vecY.z = auxiliary_palm_position_now[2].at<float>(2,0) - auxiliary_palm_position_now[0].at<float>(2,0);
+
+    vecZ.x = auxiliary_palm_position_now[3].at<float>(0,0) - auxiliary_palm_position_now[0].at<float>(0,0);
+    vecZ.y = auxiliary_palm_position_now[3].at<float>(1,0) - auxiliary_palm_position_now[0].at<float>(1,0);
+    vecZ.z = auxiliary_palm_position_now[3].at<float>(2,0) - auxiliary_palm_position_now[0].at<float>(2,0);
+
+    //2.1 palm front:
+    pcl::PointXYZRGB p;
+    p.rgb = joints_position[0].rgb;
+    for(float step = -0.036; step < 0.049; step += xy_resolution){
+        Point3d center;
+        center.x = auxiliary_palm_position_now[0].at<float>(0,0) + step*vecX.x + 0.012*vecY.x;
+        center.y = auxiliary_palm_position_now[0].at<float>(1,0) + step*vecX.y + 0.012*vecY.y;
+        center.z = auxiliary_palm_position_now[0].at<float>(2,0) + step*vecX.z + 0.012*vecY.z;
+
+        float radius = 0.012 - fabs(step - 0.0095)*0.1;
+        //float radius_factor = 1-fabs(step - 0.0095)*0.1;
+        for(int theta = theta_resolution; theta < 180; theta += theta_resolution){
+            float cosT = cos(degree2arc(theta)), sinT = sin(degree2arc(theta));
+
+            p.x = center.x + radius*(vecY.x*sinT + vecZ.x*cosT);
+            p.y = center.y + radius*(vecY.y*sinT + vecZ.y*cosT);
+            p.z = center.z + radius*(vecY.z*sinT + vecZ.z*cosT);
+
+            handPointCloud.push_back(p);
+        }
+    }
+
+    //2.2 palm main:
+    uint8_t r = 50;
+    uint8_t g = 255;
+    uint8_t b = 50;
+    uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
+    p.rgb = rgb;
+    Point3d start;
+    start.x = auxiliary_palm_position_now[0].at<float>(0,0) + 0.012*vecY.x + 0.005*vecX.x;
+    start.y = auxiliary_palm_position_now[0].at<float>(1,0) + 0.012*vecY.y + 0.005*vecX.y;
+    start.z = auxiliary_palm_position_now[0].at<float>(2,0) + 0.012*vecY.z + 0.005*vecX.z;
+
+    for(float step = 0; step < 0.08; step += xy_resolution){
+        Point3d center;
+        center.x = start.x - step * vecY.x;
+        center.y = start.y - step * vecY.y;
+        center.z = start.z - step * vecY.z;
+
+        float radius = 0.01;
+        float radius_factor1 = (8.5 - step * 40)/2.0;
+        float radius_factor2 = 1.2 + step * 5;
+        for(float theta = 0; theta < 360; theta += 5){
+            float cosT = cos(degree2arc(theta)), sinT = sin(degree2arc(theta));
+
+            p.x = center.x + radius*(radius_factor1*vecX.x*sinT + radius_factor2*vecZ.x*cosT);
+            p.y = center.y + radius*(radius_factor1*vecX.y*sinT + radius_factor2*vecZ.y*cosT);
+            p.z = center.z + radius*(radius_factor1*vecX.z*sinT + radius_factor2*vecZ.z*cosT);
+
+            handPointCloud.push_back(p);
+        }
+
+    }
+
+
+
+    //3. Joints:
+}
 
 
 

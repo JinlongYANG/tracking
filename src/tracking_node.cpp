@@ -9,6 +9,7 @@
 #include <boost/random.hpp>
 #include <boost/random/normal_distribution.hpp>
 #include <omp.h>
+#include "para_deque.h"
 
 #define PI 3.14159265
 
@@ -34,7 +35,7 @@ bool flag_leap = true;
 float para_lastFrame[26], det_para[26];
 int seq = 0;
 int back_groud_value = 100;
-std::deque< vector<float> > para_sequence;
+para_deque parameter_que(7);
 
 articulate_HandModel_XYZRGB MyHand;
 
@@ -83,7 +84,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
     ros::Time time0 = ros::Time::now();
     cv_bridge::CvImagePtr cvpointer_depthFrame;
 
-    int tracking_mode = 7;
+    int tracking_mode = 9;
 
 
 
@@ -96,6 +97,8 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         //********************************************************//
         //1.1 get ready of Hand point cloud and joints position
         // hand point cloud in pcl::PointCloud<pcl::PointXYZRGB> handcloud; and joints position in: hand_kp;
+        ros::Time time1 = ros::Time::now();
+
         fromROSMsg(*hand_kp_pter, hand_kp);
         fromROSMsg(*hand_pter, msg_pcl);
 
@@ -106,6 +109,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         Mat Origional_depthImage;
         Origional_depthImage = cvpointer_depthFrame->image;
 
+        ros::Time time2 = ros::Time::now();
 
         for (size_t i = 0; i < msg_pcl.points.size (); ++i){
             if( (abs(msg_pcl.points[i].x) < 0.2
@@ -138,6 +142,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
             }
         }
 
+        ros::Time time3 = ros::Time::now();
         //******** 1.1 done  **************//
 
         //********************************************************//
@@ -148,12 +153,20 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         //GridGraphSeqeratePalm(hand_kp, handcloud, Segmented_hand_cloud, label);
         NearestNeighbour(hand_kp, handcloud, Segmented_hand_cloud, label);
         //******** 1.2 done  **************//
+        ros::Time time4 = ros::Time::now();
+
 
         //******** 1.3 Ray tracing for Oberservation **********//
         // Determin whether point in visible or not, and generate visibility map stored in visibilityMap_Oberservation and visiblityMap_Hypo;
         Mat visibilityMap_Oberservation(imageSize,imageSize,CV_8UC1,Scalar(back_groud_value));
         Ray_tracing_OrthognalProjection(handcloud, imageSize, resolution, visibilityMap_Oberservation);
         //******** 1.3 done *****************//
+        ros::Time time5 = ros::Time::now();
+        std::cout << "From callback begin to try took " << time1-time0 << " seconds." << std::endl;
+        std::cout << "Message from transfer took " << time2-time1 << " seconds." << std::endl;
+        std::cout << "Picking hand points took " << time3-time2 << " seconds." << std::endl;
+        std::cout << "NN Segmentation took " << time4-time3 << " seconds." << std::endl;
+        std::cout << "Ray tracking for Oberservation took " << time5-time4 << " seconds." << std::endl;
 
         pcl::PointCloud<pcl::PointXYZRGB> modelPointCloud;
 
@@ -177,7 +190,14 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
             }
             MyHand.set_parameters(para);
             MyHand.get_joints_positions();
-            MyHand.get_handPointCloud(modelPointCloud);
+            ros::Time time_begin = ros::Time::now();
+            //MyHand.get_handPointCloud(modelPointCloud);
+            ros::Time time_end = ros::Time::now();
+            std::cout << "Transform point cloud took " << time_end-time_begin << " seconds." <<std::endl;
+            time_begin = ros::Time::now();
+            MyHand.samplePointCloud(modelPointCloud);
+            time_end = ros::Time::now();
+            std::cout << "Resample point cloud took " << time_end-time_begin << " seconds." <<std::endl;
         }
 
         //******** 2.0 particle filters for tracking --------Naive particle filter*********//
@@ -705,7 +725,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     }
 
 #pragma omp for
-                    for (int iterator = 0; iterator < 40; iterator ++){
+                    for (int iterator = 0; iterator < 50; iterator ++){
                         //******** 2.1 generate Hypothesis point cloud *******//
 
                         if (iterator == 0){
@@ -1336,7 +1356,6 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
             MyHand.get_handPointCloud(modelPointCloud);
         }
 
-
         //******** 2.0 particle filters for tracking --------annealing one by one kinematic chain with multi-score (overlap rate) and local parameter influence*****//
         else if (tracking_mode == 7){
             float optimal_para[26];
@@ -1509,12 +1528,15 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     }
                 }
             }
+            vector<float> for_the_que;
             for(int i = 0; i< 26; i++){
                 std::cout << "para" << i <<": " << optimal_para[i] << std::endl;
                 det_para[i] = optimal_para[i]-para_lastFrame[i];
                 det_para[i] = 0;
                 para_lastFrame[i] = optimal_para[i];
+                for_the_que.push_back(optimal_para[i]);
             }
+            parameter_que.add_new(for_the_que);
             std::cout << "Overlap ratio1: " <<Opt_Score_overlapratio1 << std::endl;
             std::cout << "Overlap ratio2: " <<Opt_Score_overlapratio2 << std::endl;
             std::cout << "Average overlap distance: " << Opt_Score_aver_overlapdiff << std::endl;
@@ -1776,7 +1798,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     //use last frame result for current frame initialization
                     else if ((!annealing_iterator)&&(!kinematic_chain)){
                         for(int i = 0; i<26;i++){
-                            para[i] = para_lastFrame[i] + det_para[i];
+                            para[i] = parameter_que.para_sequence_smoothed[0][i] + det_para[i];
                             para_suboptimal[i] = para[i];
                         }
                     }
@@ -1792,8 +1814,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     if (kinematic_chain == 0){
                         max_iterator = 30;
                     }
-
-#pragma omp for
+//#pragma omp for
                     for (int iterator = 0; iterator < max_iterator; iterator ++){
                         //******** 2.1 generate Hypothesis point cloud *******//
 
@@ -1803,7 +1824,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                         //                            }
                         //                        }
 
-                        int step_large = 15;
+                        int step_large = 10;
                         int step_small = 10;
                         int a_large = step_large*100;
                         int a_small = step_small*100;
@@ -1814,15 +1835,16 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                             float temp;
                             temp = (rand()%a_large/100.0-b_large)*annealing_factor;
                             para[3] += temp;
-                            para[11] += temp;
-                            para[15] += temp;
-                            para[19] += temp;
-                            para[23] += temp;
+                            para[7] -= 0.8*temp;
+                            para[11] -= 0.8*temp;
+                            para[15] -= 0.8*temp;
+                            para[19] -= 0.8*temp;
+                            para[23] -= 0.8*temp;
 
-                            para[4] += (rand()%a_large/100.0-b_large)*2*annealing_factor;
+                            para[4] += (rand()%a_large/100.0-b_large)*annealing_factor;
 
                             para[5] += ((para[10]-10)+(para[14]-0)+(para[18]+6.7))/3.0;
-                            para[5] += (rand()%a_large/100.0-b_large)*annealing_factor;
+                            para[5] += (rand()%a_small/100.0-b_small)*annealing_factor;
                         }
                         else if (kinematic_chain == 1){
                             para[6] += (rand()%a_small/100.0-b_small)*annealing_factor;
@@ -1874,13 +1896,18 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                         //generate hypo
                         MyHand.set_parameters(para);
                         MyHand.get_joints_positions();
-                        MyHand.get_handPointCloud(modelPointCloud);
+                        //ros::Time time_begin = ros::Time::now();
+                        //MyHand.get_handPointCloud(modelPointCloud);
+                        MyHand.samplePointCloud(modelPointCloud);
+                        //ros::Time time_end = ros::Time::now();
+                        //std::cout<<"Duration: "<< time_end-time_begin << std::endl;
                         //******** 2.1 done ****************//
 
                         //******** 2.2 Ray tracing for Hypothesis ********//
                         Mat visiblityMap_Hypo(imageSize,imageSize,CV_8UC1,Scalar(back_groud_value));
                         pcl::PointCloud<pcl::PointXYZRGB> visibleModelPointCloud;
-                        Ray_tracing_OrthognalProjection(modelPointCloud, imageSize, resolution, visiblityMap_Hypo, visibleModelPointCloud);
+                        //Ray_tracing_OrthognalProjection(modelPointCloud, imageSize, resolution, visiblityMap_Hypo, visibleModelPointCloud);
+                        Ray_tracing_OrthognalProjection(modelPointCloud, imageSize, resolution, visiblityMap_Hypo);
                         //******** 2.2 done *******************//
 
                         //        imshow("visibilityMap_Oberservation", visibilityMap_Oberservation);
@@ -1888,11 +1915,11 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                         //        waitKey();
 
                         //ROS_INFO("Prepare Model Cloud");
-                        sensor_msgs::PointCloud2 model_cloud_msg;
-                        toROSMsg(visibleModelPointCloud,model_cloud_msg);
-                        model_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
-                        model_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
-                        modelPublisher_.publish(model_cloud_msg);
+//                        sensor_msgs::PointCloud2 model_cloud_msg;
+//                        toROSMsg(visibleModelPointCloud,model_cloud_msg);
+//                        model_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
+//                        model_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
+//                        modelPublisher_.publish(model_cloud_msg);
 
                         //******** 2.3 Score (similarity assessment) ******//
                         float overlap, overall_diff, overlap_diff, overlap_obs, overlap_hyp;
@@ -1900,26 +1927,13 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                         //******** 2.3 done *************//
 
                         //std::cout << "Overall_diff: " << overall_diff << std::endl;
-                        if(kinematic_chain%2 != 0){
-                            if((overlap_obs/overlap <= Opt_Score_overlapratio1 || overlap_hyp/overlap <= Opt_Score_overlapratio2) && overlap_diff/overlap <= Opt_Score_aver_overlapdiff){
-                                Opt_Score_overlapratio1 = min(overlap_obs/overlap,Opt_Score_overlapratio1);
-                                Opt_Score_overlapratio2 = min(overlap_hyp/overlap, Opt_Score_overlapratio2);
-                                Opt_Score_aver_overlapdiff = 1.0*overlap_diff/overlap;
-                                for(int i = 0; i< 26; i++){
-                                    optimal_para[i] = para[i];
-                                }
-                            }
-                        }
-                        else{
-                            if((overlap_obs/overlap <= Opt_Score_overlapratio1 + 0.05 || overlap_hyp/overlap <= Opt_Score_overlapratio2 + 0.05)){
-                                if(overlap_obs/overlap <= Opt_Score_overlapratio1)
-                                    Opt_Score_overlapratio1 = min(overlap_obs/overlap,Opt_Score_overlapratio1);
-                                if(overlap_hyp/overlap <= Opt_Score_overlapratio2)
-                                    Opt_Score_overlapratio2 = min(overlap_hyp/overlap, Opt_Score_overlapratio2);
-                                Opt_Score_aver_overlapdiff = 1.0*overlap_diff/overlap;
-                                for(int i = 0; i< 26; i++){
-                                    optimal_para[i] = para[i];
-                                }
+
+                        if((overlap_obs/overlap <= Opt_Score_overlapratio1 || overlap_hyp/overlap <= Opt_Score_overlapratio2) && overlap_diff/overlap <= Opt_Score_aver_overlapdiff){
+                            Opt_Score_overlapratio1 = min(overlap_obs/overlap,Opt_Score_overlapratio1);
+                            Opt_Score_overlapratio2 = min(overlap_hyp/overlap, Opt_Score_overlapratio2);
+                            Opt_Score_aver_overlapdiff = 1.0*overlap_diff/overlap;
+                            for(int i = 0; i< 26; i++){
+                                optimal_para[i] = para[i];
                             }
                         }
 
@@ -1931,12 +1945,18 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     }
                 }
             }
+            vector<float> for_the_que;
             for(int i = 0; i< 26; i++){
                 std::cout << "para" << i <<": " << optimal_para[i] << std::endl;
-                det_para[i] = optimal_para[i]-para_lastFrame[i];
-                det_para[i] = 0;
                 para_lastFrame[i] = optimal_para[i];
+                for_the_que.push_back(optimal_para[i]);
             }
+            parameter_que.add_new(for_the_que);
+            parameter_que.smooth_mean(3);
+            for(int i = 0; i< 26; i++){
+                det_para[i] = parameter_que.para_delta[i];
+            }
+
             std::cout << "Overlap ratio1: " <<Opt_Score_overlapratio1 << std::endl;
             std::cout << "Overlap ratio2: " <<Opt_Score_overlapratio2 << std::endl;
             std::cout << "Average overlap distance: " << Opt_Score_aver_overlapdiff << std::endl;
@@ -1948,13 +1968,367 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
             //        boost::normal_distribution<> distribution(70, 10);
             //        boost::variate_generator< boost::mt19937, boost::normal_distribution<> > dist(*rng, distribution);
 
+            for(int i = 0; i< 25; i++){
+                optimal_para[i] = parameter_que.para_sequence_smoothed[0][i];
+            }
             MyHand.set_parameters(optimal_para);
             MyHand.get_joints_positions();
-            MyHand.get_handPointCloud(modelPointCloud);
+            //MyHand.get_handPointCloud(modelPointCloud);
+            MyHand.samplePointCloud(modelPointCloud);
         }
 
 
-        //******** 2.0 particle filters for tracking --------7 with parameter smoothness*****//
+        //******** 2.0 particle filters for tracking --------annealing as a whole and then annealing one by one kinematic chain*****//
+        else if (tracking_mode == 10){
+            //annealing as a whole first
+                float optimal_para[26];
+                float Opt_Score_overlapratio1 = 100000, Opt_Score_aver_overlapdiff = 100000, Opt_Score_overlapratio2 = 10000;
+                for( int annealling_iterator = 0; annealling_iterator < 2; annealling_iterator++){
+                    float annealling_factor = pow(2,-annealling_iterator);
+                    float para[26];
+                    float para_suboptimal[26];
+                    if(!seq){
+                        if(!annealling_iterator){
+                            float temp_parameters[26]= {0,0,0,
+                                                        -30,0,-10,
+                                                        30,10,10,0,
+                                                        10,0,0,0,
+                                                        0,0,0,0,
+                                                        -10,0,0,0,
+                                                        -20,0,0,0,};
+
+                            for(int i = 0; i<26;i++){
+                                para_lastFrame[i] = temp_parameters[i];
+                                det_para[i] = 0;
+                                para[i] = temp_parameters[i];
+                                para_suboptimal[i] = temp_parameters[i];
+                            }
+                        }
+                        else{
+                            for(int i = 0; i<26; ++i){
+                                para[i] = optimal_para[i];
+                                para_suboptimal[i] = optimal_para[i];
+                            }
+                        }
+                    }
+                    else{
+                        if( !annealling_iterator){
+                            for(int i = 0; i<26;i++){
+                                para[i] = parameter_que.para_sequence_smoothed[0][i] + det_para[i];
+                                para_suboptimal[i] = para[i];
+                            }
+                        }
+                        else{
+                            for(int i = 0; i<26; ++i){
+                                para[i] = optimal_para[i];
+                                para_suboptimal[i] = para[i];
+                            }
+                        }
+                    }
+
+#pragma omp for
+                    for (int iterator = 0; iterator < 80; iterator ++){
+                        //******** 2.1 generate Hypothesis point cloud *******//
+
+                        if (iterator == 0){
+                            for(int i = 0; i< 26; i++){
+                                std::cout << "para" << i <<": " << para[i] << std::endl;
+                            }
+                        }
+                        int step_large = 30;
+                        int step_small = 20;
+                        int a_large = step_large*100;
+                        int a_small = step_small*100;
+                        float b_large = step_large/2.0;
+                        float b_small = step_small/2.0;
+
+
+                        para[3] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[4] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[5] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[6] += (rand()%a_small/100.0-b_small)*annealling_factor;
+                        para[7] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[8] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[9] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[10] += (rand()%a_small/100.0-b_small)*annealling_factor;
+                        para[11] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[12] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[13] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[14] += (rand()%a_small/100.0-b_small)*annealling_factor;
+                        para[15] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[16] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[17] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[18] += (rand()%a_small/100.0-b_small)*annealling_factor;
+                        para[19] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[20] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[21] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[22] += (rand()%a_small/100.0-b_small)*annealling_factor;
+                        para[23] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[24] += (rand()%a_large/100.0-b_large)*annealling_factor;
+                        para[25] += (rand()%a_large/100.0-b_large)*annealling_factor;
+
+                        for(int i = 0; i < 26; i++){
+                            if(para[i] > MyHand.parameters_max[i]){
+                                para[i] = MyHand.parameters_max[i];
+                            }
+                            else if (para[i] < MyHand.parameters_min[i]){
+                                para[i] = MyHand.parameters_min[i];
+                            }
+                        }
+
+                        MyHand.set_parameters(para);
+                        MyHand.get_joints_positions();
+                        MyHand.get_handPointCloud(modelPointCloud);
+                        //******** 2.1 done ****************//
+
+                        //******** 2.2 Ray tracing for Hypothesis ********//
+                        Mat visiblityMap_Hypo(imageSize,imageSize,CV_8UC1,Scalar(back_groud_value));
+                        pcl::PointCloud<pcl::PointXYZRGB> visibleModelPointCloud;
+                        Ray_tracing_OrthognalProjection(modelPointCloud, imageSize, resolution, visiblityMap_Hypo, visibleModelPointCloud);
+                        //******** 2.2 done *******************//
+
+
+                        //******** 2.3 Score (similarity assessment) ******//
+                        float overlap, overall_diff, overlap_diff, overlap_obs, overlap_hyp;
+                        Score(visibilityMap_Oberservation, visiblityMap_Hypo, back_groud_value, overlap, overlap_obs, overlap_hyp, overall_diff, overlap_diff);
+                        //******** 2.3 done *************//
+
+                        //std::cout << "Overall_diff: " << overall_diff << std::endl;
+
+                        if((overlap_obs/overlap <= Opt_Score_overlapratio1 || overlap_hyp/overlap <= Opt_Score_overlapratio2) && overlap_diff/overlap <= Opt_Score_aver_overlapdiff){
+                            Opt_Score_overlapratio1 = min(overlap_obs/overlap,Opt_Score_overlapratio1);
+                            Opt_Score_overlapratio2 = min(overlap_hyp/overlap, Opt_Score_overlapratio2);
+                            Opt_Score_aver_overlapdiff = 1.0*overlap_diff/overlap;
+                            for(int i = 0; i< 26; i++){
+                                optimal_para[i] = para[i];
+                            }
+                        }
+
+                        for(int i = 0; i< 26; i++){
+                            //std::cout << "para" << i <<": " << para[i] << std::endl;
+                            para[i] = para_suboptimal[i];
+                        }
+
+                    }
+                    for(int i = 0; i< 26; i++){
+                        std::cout << "para" << i <<": " << optimal_para[i] << std::endl;
+                        para_suboptimal[i] = optimal_para[i];
+                    }
+//                    MyHand.set_parameters(optimal_para);
+//                    MyHand.get_joints_positions();
+//                    MyHand.get_handPointCloud(modelPointCloud);
+
+//                    ROS_INFO("Prepare Model Cloud");
+//                    sensor_msgs::PointCloud2 model_cloud_msg;
+//                    toROSMsg(modelPointCloud,model_cloud_msg);
+//                    model_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
+//                    model_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
+//                    modelPublisher_.publish(model_cloud_msg);
+
+                    std::cout << "Overlap ratio1: " <<Opt_Score_overlapratio1 << std::endl;
+                    std::cout << "Overlap ratio2: " <<Opt_Score_overlapratio2 << std::endl;
+                    std::cout << "Average overlap distance: " << Opt_Score_aver_overlapdiff << std::endl;
+                }
+
+//                for(int i = 0; i< 26; i++){
+//                    std::cout << "para" << i <<": " << optimal_para[i] << std::endl;
+//                    //det_para[i] = optimal_para[i]-para_lastFrame[i];
+//                    //det_para[i] = 0;
+//                    //para_lastFrame[i] = optimal_para[i];
+//                }
+
+//                MyHand.set_parameters(optimal_para);
+//                MyHand.get_joints_positions();
+//                MyHand.get_handPointCloud(modelPointCloud);
+
+
+                //annealing kinematic chain:
+                for(int annealing_iterator = 2; annealing_iterator < 4; annealing_iterator++){
+                    float annealing_factor = pow(0.5, annealing_iterator);
+                    for(int kinematic_chain = 0; kinematic_chain < 21; ++kinematic_chain){
+                        float para[26];
+                        float para_suboptimal[26];
+
+                        //use last frame result for current frame initialization
+                        if ((!annealing_iterator)&&(!kinematic_chain)){
+                            for(int i = 0; i<26;i++){
+                                //para[i] = parameter_que.para_sequence_smoothed[0][i] + det_para[i];
+                                //para_suboptimal[i] = para[i];
+                                para[i] = optimal_para[i];
+                                para_suboptimal[i] = para[i];
+                            }
+                        }
+
+                        //use last kinematic_chain result for current kinematic chain initialization
+                        else{
+                            for(int i = 0; i<26; ++i){
+                                para[i] = optimal_para[i];
+                                para_suboptimal[i] = para[i];
+                            }
+                        }
+                        int max_iterator = 5;
+                        if (kinematic_chain == 0){
+                            max_iterator = 30;
+                        }
+
+    #pragma omp for
+                        for (int iterator = 0; iterator < max_iterator; iterator ++){
+                            //******** 2.1 generate Hypothesis point cloud *******//
+
+                            //                        if (iterator == 0){
+                            //                            for(int i = 0; i< 26; i++){
+                            //                                std::cout << "para" << i <<": " << para[i] << std::endl;
+                            //                            }
+                            //                        }
+
+                            int step_large = 30;
+                            int step_small = 20;
+                            int a_large = step_large*100;
+                            int a_small = step_small*100;
+                            float b_large = step_large/2.0;
+                            float b_small = step_small/2.0;
+
+                            if(kinematic_chain == 0){
+                                float temp;
+                                temp = 2*(rand()%a_large/100.0-b_large)*annealing_factor;
+                                para[3] += temp;
+                                para[7] -= 0.8*temp;
+                                para[11] -= 0.8*temp;
+                                para[15] -= 0.8*temp;
+                                para[19] -= 0.8*temp;
+                                para[23] -= 0.8*temp;
+
+                                para[4] += (rand()%a_large/100.0-b_large)*2*annealing_factor;
+
+                                para[5] += ((para[10]-10)+(para[14]-0)+(para[18]+6.7))/3.0;
+                                para[5] += (rand()%a_large/100.0-b_large)*annealing_factor;
+                            }
+                            else if (kinematic_chain == 1){
+                                para[6] += (rand()%a_small/100.0-b_small)*annealing_factor;
+                            }
+                            else if (kinematic_chain == 5){
+                                para[10] += (rand()%a_small/100.0-b_small)*annealing_factor;
+                            }
+                            else if (kinematic_chain == 9){
+                                para[14] += (rand()%a_small/100.0-b_small)*annealing_factor;
+                            }
+                            else if (kinematic_chain == 13){
+                                para[18] += (rand()%a_small/100.0-b_small)*annealing_factor;
+                            }
+                            else if (kinematic_chain == 17){
+                                para[22] += (rand()%a_small/100.0-b_small)*annealing_factor;
+                            }
+
+                            else{
+                                float temp = (rand()%a_large/100.0-b_large)*3*annealing_factor;
+                                para[kinematic_chain+5] += temp;
+                                if((kinematic_chain+6-2)%4 != 0)
+                                    para[kinematic_chain+6] -= 0.8*temp;
+                                if(kinematic_chain+5%4 == 1){
+                                    if(para[kinematic_chain+6] > para[kinematic_chain+5])
+                                        para[kinematic_chain+5] += 0.8*(para[kinematic_chain+6] - para[kinematic_chain+5]);
+                                }
+                                //                            if(para[9] > para[8])
+                                //                                para[8] += 0.8*(para[9]-para[8]);
+                                //                            if(para[13] > para[12])
+                                //                                para[12] += 0.8*(para[13]-para[12]);
+                                //                            if(para[17] > para[16])
+                                //                                para[16] += 0.8*(para[17]-para[16]);
+                                //                            if(para[21] > para[20])
+                                //                                para[20] += 0.8*(para[21]-para[20]);
+                                //                            if(para[25] > para[24])
+                                //                                para[24] += 0.8*(para[25]-para[24]);
+                            }
+                            //check parameters:
+
+                            for(int i = 0; i < 26; i++){
+                                if(para[i] > MyHand.parameters_max[i]){
+                                    para[i] = MyHand.parameters_max[i];
+                                }
+                                else if (para[i] < MyHand.parameters_min[i]){
+                                    para[i] = MyHand.parameters_min[i];
+                                }
+                            }
+
+                            //generate hypo
+                            MyHand.set_parameters(para);
+                            MyHand.get_joints_positions();
+                            MyHand.get_handPointCloud(modelPointCloud);
+                            //******** 2.1 done ****************//
+
+                            //******** 2.2 Ray tracing for Hypothesis ********//
+                            Mat visiblityMap_Hypo(imageSize,imageSize,CV_8UC1,Scalar(back_groud_value));
+                            pcl::PointCloud<pcl::PointXYZRGB> visibleModelPointCloud;
+                            Ray_tracing_OrthognalProjection(modelPointCloud, imageSize, resolution, visiblityMap_Hypo, visibleModelPointCloud);
+                            //******** 2.2 done *******************//
+
+                            //        imshow("visibilityMap_Oberservation", visibilityMap_Oberservation);
+                            //        imshow("visiblityMap_Hypo", visiblityMap_Hypo);
+                            //        waitKey();
+
+                            //ROS_INFO("Prepare Model Cloud");
+                            sensor_msgs::PointCloud2 model_cloud_msg;
+                            toROSMsg(visibleModelPointCloud,model_cloud_msg);
+                            model_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
+                            model_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
+                            modelPublisher_.publish(model_cloud_msg);
+
+                            //******** 2.3 Score (similarity assessment) ******//
+                            float overlap, overall_diff, overlap_diff, overlap_obs, overlap_hyp;
+                            Score(visibilityMap_Oberservation, visiblityMap_Hypo, back_groud_value, overlap, overlap_obs, overlap_hyp, overall_diff, overlap_diff);
+                            //******** 2.3 done *************//
+
+                            //std::cout << "Overall_diff: " << overall_diff << std::endl;
+
+                            if((overlap_obs/overlap <= Opt_Score_overlapratio1 || overlap_hyp/overlap <= Opt_Score_overlapratio2) && overlap_diff/overlap <= Opt_Score_aver_overlapdiff){
+                                Opt_Score_overlapratio1 = min(overlap_obs/overlap,Opt_Score_overlapratio1);
+                                Opt_Score_overlapratio2 = min(overlap_hyp/overlap, Opt_Score_overlapratio2);
+                                Opt_Score_aver_overlapdiff = 1.0*overlap_diff/overlap;
+                                for(int i = 0; i< 26; i++){
+                                    optimal_para[i] = para[i];
+                                }
+                            }
+
+
+                            for(int i = 0; i< 26; i++){
+                                //std::cout << "para" << i <<": " << para[i] << std::endl;
+                                para[i] = para_suboptimal[i];
+                            }
+                        }
+                    }
+                }
+                vector<float> for_the_que;
+                for(int i = 0; i< 26; i++){
+                    std::cout << "para" << i <<": " << optimal_para[i] << std::endl;
+                    para_lastFrame[i] = optimal_para[i];
+                    for_the_que.push_back(optimal_para[i]);
+                }
+                parameter_que.add_new(for_the_que);
+                parameter_que.smooth_mean(3);
+                for(int i = 0; i< 26; i++){
+                    det_para[i] = parameter_que.para_delta[i];
+                }
+
+                std::cout << "Overlap ratio1: " <<Opt_Score_overlapratio1 << std::endl;
+                std::cout << "Overlap ratio2: " <<Opt_Score_overlapratio2 << std::endl;
+                std::cout << "Average overlap distance: " << Opt_Score_aver_overlapdiff << std::endl;
+
+                //Gaution:
+                //        boost::mt19937 *rng = new boost::mt19937();
+                //        rng->seed(time(NULL));
+
+                //        boost::normal_distribution<> distribution(70, 10);
+                //        boost::variate_generator< boost::mt19937, boost::normal_distribution<> > dist(*rng, distribution);
+
+                for(int i = 0; i< 25; i++){
+                    optimal_para[i] = parameter_que.para_sequence_smoothed[0][i];
+                }
+                MyHand.set_parameters(optimal_para);
+                MyHand.get_joints_positions();
+                MyHand.get_handPointCloud(modelPointCloud);
+
+
+        }
 
 
         pcl::PointCloud<pcl::PointXYZRGB> articulation;
@@ -1982,35 +2356,37 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         if(seq > 10000)
             seq = 1;
         ///////////////////////////////////////////////////////////
-        ROS_INFO("Prepare Hand Cloud");
+        ros::Time Publish_begin = ros::Time::now();
+
+        //ROS_INFO("Prepare Hand Cloud");
         sensor_msgs::PointCloud2 hand_cloud_msg;
         toROSMsg(handcloud,hand_cloud_msg);
         hand_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
         hand_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
         handPublisher_.publish(hand_cloud_msg);
 
-        ROS_INFO("Prepare Segmented Hand Cloud");
+        //ROS_INFO("Prepare Segmented Hand Cloud");
         sensor_msgs::PointCloud2 segmented_hand_cloud_msg;
         toROSMsg(Segmented_hand_cloud,segmented_hand_cloud_msg);
         segmented_hand_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
         segmented_hand_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
         segmented_hand_.publish(segmented_hand_cloud_msg);
 
-        ROS_INFO("Prepare Articulation");
+        //ROS_INFO("Prepare Articulation");
         sensor_msgs::PointCloud2 cloud_msg_articulation;
         toROSMsg(articulation,cloud_msg_articulation);
         cloud_msg_articulation.header.frame_id=hand_kp_pter->header.frame_id;
         cloud_msg_articulation.header.stamp = hand_kp_pter->header.stamp;
         articulatePublisher_.publish(cloud_msg_articulation);
 
-        ROS_INFO("Prepare Model Cloud");
+        //ROS_INFO("Prepare Model Cloud");
         sensor_msgs::PointCloud2 model_cloud_msg;
         toROSMsg(modelPointCloud,model_cloud_msg);
         model_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
         model_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
         modelPublisher_.publish(model_cloud_msg);
 
-        ROS_INFO("Prepare Hand Detection Result");
+        //ROS_INFO("Prepare Hand Detection Result");
         visualization_msgs::Marker bone;
         bone.header.frame_id = hand_kp_pter->header.frame_id;
         bone.header.stamp = hand_kp_pter->header.stamp;
@@ -2058,6 +2434,9 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         p2.z = articulation.points[6].z;
         bone.points.push_back(p2);
         bone_pub_.publish( bone );
+
+        ros::Time Publish_end = ros::Time::now();
+        std::cout << "Publish messages took " << Publish_end-Publish_begin << " seconds." << std::endl;
 
 
 
