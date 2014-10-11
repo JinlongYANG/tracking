@@ -3,6 +3,7 @@
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
 #include <omp.h>
+#include <vector>
 
 #define PI 3.14159265
 
@@ -129,7 +130,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     //2. bone length initialization:
     //thumb
     bone_length[0][0] = 0/1000;
-    bone_length[0][1] = 50.1779/1000;
+    bone_length[0][1] = 40.1779/1000;
     bone_length[0][2] = 31.9564/1000;
     bone_length[0][3] = 22.9945/1000;
     //index finger
@@ -162,7 +163,11 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     //palm.thumb
     float delt_y = 0.002;
     Model_joints[1].at<float>(0,0) = -0.014 - 0.002;
-    Model_joints[1].at<float>(1,0) = -0.053 + delt_y;
+    Model_joints[1].at<float>(1,0) = -0.053 +delt_y;
+    Model_joints[1].at<float>(2,0) = 0.002;
+
+    Model_joints[1].at<float>(0,0) = -0.014 - 0.002 -0.005;
+    Model_joints[1].at<float>(1,0) = -0.053 +0.01+delt_y;
     Model_joints[1].at<float>(2,0) = 0.002;
     //palm.index
     Model_joints[6].at<float>(0,0) = -0.014 - 0.002;
@@ -497,10 +502,10 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_min[5] = -180;
     parameters_max[5] = 180;
 
-    parameters_min[6] = -10;
+    parameters_min[6] = 0;
     parameters_max[6] = 60;
-    parameters_min[7] = 0;
-    parameters_max[7] = 60;
+    parameters_min[7] = -60;
+    parameters_max[7] = 0;
     parameters_min[8] = -10;
     parameters_max[8] = 70;
     parameters_min[9] = -10;
@@ -542,13 +547,16 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_min[25] = 0;
     parameters_max[25] = 80;
 
+    parameters_min[26] = 60;
+    parameters_max[26] = 90;
+
 
     std::cout << "Model is ready!" << std::endl;
 
 }
 
 bool articulate_HandModel_XYZRGB::check_parameters(int &wrong_parameter_index){
-    for(int i = 0; i < 26; i++){
+    for(int i = 0; i < 27; i++){
         if(parameters[i] > parameters_max[i] || parameters[i] < parameters_min[i]){
             wrong_parameter_index = i;
             std::cout << "Wrong parameter index: " << wrong_parameter_index <<"; Value: "<< parameters[i] << std::endl;
@@ -559,7 +567,7 @@ bool articulate_HandModel_XYZRGB::check_parameters(int &wrong_parameter_index){
 }
 
 void articulate_HandModel_XYZRGB::check_parameters(){
-    for(int i = 0; i < 26; i++){
+    for(int i = 0; i < 27; i++){
         if(parameters[i] > parameters_max[i]){
             parameters[i] = parameters_max[i];
         }
@@ -622,10 +630,12 @@ void articulate_HandModel_XYZRGB::set_parameters(){
     parameters[23] = 30;
     parameters[24] = 70;
     parameters[25] = 30;
+
+    parameters[26] = 70;
 }
 
-void articulate_HandModel_XYZRGB::set_parameters(float para[26]){
-    for(int i = 0; i<26; i++)
+void articulate_HandModel_XYZRGB::set_parameters(float para[27]){
+    for(int i = 0; i<27; i++)
         parameters[i] = para[i];
 }
 
@@ -654,7 +664,7 @@ void articulate_HandModel_XYZRGB::get_joints_positions(){
     Model_joints[22].copyTo(joints_for_calc[22]);
 
     //2.fingers:
-    //2.1 index(extrinsic):
+    //2.1 index(intrinsic, from left to right):
     Mat R[3];
     R[0] = R_z(parameters[10])*R_x(parameters[11]);
     R[1] = R_x(parameters[12]);
@@ -664,7 +674,7 @@ void articulate_HandModel_XYZRGB::get_joints_positions(){
     joints_for_calc[9] = R[0]*(R[1]*joints_for_calc[9]+joints_for_calc[8])+joints_for_calc[7];
     joints_for_calc[8] = R[0]*joints_for_calc[8]+joints_for_calc[7];
 
-    //2.2 middel to pinky(extrinsic):
+    //2.2 middel to pinky(intrinsic, from left to right):
     for ( int i = 0; i < 3; ++i){
         R[0] = R_z(parameters[i*4+14])*R_x(parameters[i*4+15]);
         R[1] = R_x(parameters[i*4+16]);
@@ -676,11 +686,15 @@ void articulate_HandModel_XYZRGB::get_joints_positions(){
 
     }
 
-    //2.3 thumb(extrinsic)
-    R[0] = R_y(70);
-    R[0] = R_z(10+parameters[6])*R_x(parameters[7])*R[0];
+    //2.3 thumb(intrinsic, from left to right):
+    //R[0] = R_y(90);
+    R[0] = R_y(parameters[26])*R_z(parameters[6])*R_x(parameters[7]);
     R[1] = R_x(parameters[8]);
     R[2] = R_x(parameters[9]);
+
+//    R[0] = R_y(parameters[6])*R_x(parameters[7]);
+//    R[1] = R_x(parameters[8]);
+//    R[2] = R_x(parameters[9]);
 
     //    cv::Mat mtxR, mtxQ;
     //    cv::Vec3d angles;
@@ -845,6 +859,22 @@ void articulate_HandModel_XYZRGB::get_handPointCloud(pcl::PointCloud<pcl::PointX
 void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud){
     handPointCloud.clear();
 
+//    vector<double> foo;
+//    foo.resize(200000);
+//    int zhe = 200000;
+//#pragma omp parallel for
+//    for(int j = 0; j<4;j++){
+//        for(int i = 0; i< zhe/4; i++){
+//            float value;
+//            value = i*3-j+64.0/i;
+//            if(value >3)
+//                value = 3;
+//            else
+//                value = 2;
+//           // foo[5000*j+i] = value;
+//        }
+//    }
+
     float xy_resolution = 0.003;
     float theta_resolution = 15;
     //1. Fingers:
@@ -905,8 +935,10 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
         p.rgb = joints_position[jointEnd].rgb;
 
         float step = 0;
-
-        while(step < bone_length[0][bone_index+1]){
+        float maxi_step = bone_length[0][bone_index+1];
+        if(bone_index == 2)
+            maxi_step -= 0.007;
+        while(step < maxi_step){
             Point3d axis_step;
             axis_step.x = step * axis_vector.x + joints_position[jointStart].x;
             axis_step.y = step * axis_vector.y + joints_position[jointStart].y;
@@ -930,6 +962,26 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
 
             }
             step += xy_resolution;
+        }
+        step -= xy_resolution;
+        float phi = theta_resolution;
+        while(phi < 90){
+            Point3d axis_step;
+            axis_step.x = (step + radius*sin(degree2arc(phi))) * axis_vector.x + joints_position[jointStart].x;
+            axis_step.y = (step + radius*sin(degree2arc(phi))) * axis_vector.y + joints_position[jointStart].y;
+            axis_step.z = (step + radius*sin(degree2arc(phi))) * axis_vector.z + joints_position[jointStart].z;
+            for(int theta = 0; theta < 360; theta += phi ){
+                float cosT = cos(degree2arc(theta));
+                float sinT = sin(degree2arc(theta));
+                float temp_radius = radius * cos(degree2arc(phi));
+                p.x = temp_radius*(radius_vector1.x*cosT + radius_vector2.x*sinT) + axis_step.x;
+                p.y = temp_radius*(radius_vector1.y*cosT + radius_vector2.y*sinT) + axis_step.y;
+                p.z = temp_radius*(radius_vector1.z*cosT + radius_vector2.z*sinT) + axis_step.z;
+
+                handPointCloud.push_back(p);
+
+            }
+            phi += theta_resolution;
         }
     }
 
@@ -989,8 +1041,14 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
             p.rgb = joints_position[jointEnd].rgb;
 
             float step = 0;
-
-            while(step < bone_length[finger_index][bone_index + 1]){
+            float maxi_step = bone_length[finger_index][bone_index + 1];
+            if(bone_index == 2){
+                    if(finger_index !=4)
+                     maxi_step -= 0.007;
+                    else
+                        maxi_step -= 0.006;
+            }
+            while(step < maxi_step){
                 float theta = 0;
                 Point3d axis_step;
                 axis_step.x = step * axis_vector.x + joints_position[jointStart].x;
@@ -1013,6 +1071,28 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
 
                 }
                 step += xy_resolution;
+            }
+            step -= xy_resolution;
+            float phi = theta_resolution;
+            while(phi < 90){
+                Point3d axis_step;
+                float sinPhi = sin(degree2arc(phi));
+                float cosPhi = cos(degree2arc(phi));
+                axis_step.x = (step + radius*sinPhi) * axis_vector.x + joints_position[jointStart].x;
+                axis_step.y = (step + radius*sinPhi) * axis_vector.y + joints_position[jointStart].y;
+                axis_step.z = (step + radius*sinPhi) * axis_vector.z + joints_position[jointStart].z;
+                for(int theta = 0; theta < 360; theta += phi ){
+                    float cosT = cos(degree2arc(theta));
+                    float sinT = sin(degree2arc(theta));
+                    float temp_radius = radius * cosPhi;
+                    p.x = temp_radius*(radius_vector1.x*cosT + radius_vector2.x*sinT) + axis_step.x;
+                    p.y = temp_radius*(radius_vector1.y*cosT + radius_vector2.y*sinT) + axis_step.y;
+                    p.z = temp_radius*(radius_vector1.z*cosT + radius_vector2.z*sinT) + axis_step.z;
+
+                    handPointCloud.push_back(p);
+
+                }
+                phi += theta_resolution;
             }
         }
     }
@@ -1066,7 +1146,7 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
     start.y = auxiliary_palm_position_now[0].at<float>(1,0) + 0.012*vecY.y + 0.005*vecX.y;
     start.z = auxiliary_palm_position_now[0].at<float>(2,0) + 0.012*vecY.z + 0.005*vecX.z;
 
-    for(float step = 0; step < 0.08; step += xy_resolution){
+    for(float step = 0; step < 0.075; step += xy_resolution){
         Point3d center;
         center.x = start.x - step * vecY.x;
         center.y = start.y - step * vecY.y;

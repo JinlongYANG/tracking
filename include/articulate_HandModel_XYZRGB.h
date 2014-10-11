@@ -119,9 +119,9 @@ class articulate_HandModel_XYZRGB
 public:
     articulate_HandModel_XYZRGB(const float finger_angle_step = 15, const float xy_relosution = 0.003);
 
-    float parameters[26];
-    float parameters_max[26];
-    float parameters_min[26];
+    float parameters[27];
+    float parameters_max[27];
+    float parameters_min[27];
     float bone_length[5][4];
     pcl::PointXYZRGB joints_position[26];
     Mat Model_joints[26];
@@ -134,7 +134,7 @@ public:
     bool check_parameters(int & wrong_parameter_index);
     void check_parameters();
     void set_parameters();
-    void set_parameters(float para[26]);
+    void set_parameters(float para[27]);
     void get_joints_positions();
     void get_handPointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud);
     void samplePointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud);

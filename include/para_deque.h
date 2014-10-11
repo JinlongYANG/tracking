@@ -83,13 +83,13 @@ public:
     para_deque(const int maximum_size = 5){
         size_ = 0;
         max_size_ = maximum_size;
-        for( int i = 0; i< 26; i++){
+        for( int i = 0; i< 27; i++){
             para_delta.push_back(0);
         }
     }
 
     void add_new(const vector <float> new_para){
-        if(new_para.size() == 26){
+        if(new_para.size() == 27){
             if(para_sequence.size() != max_size_){
                 para_sequence.push_front(new_para);
                 size_ ++;

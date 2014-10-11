@@ -4,7 +4,6 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include <map>
 #include <math.h>
 #include <ros/ros.h>
 #include <dynamic_reconfigure/server.h>
@@ -422,6 +421,7 @@ public:
         //std::cout<<"Cloud size: " << cloud.points.size() << " Image size: " << imageSize << std::endl;
         if(imageSize*imageSize/2 > cloud.points.size()){
             ROS_ERROR("Too high resolution for ray tracing");
+
             int x, y, z, row, col, depth;
             for ( size_t i = 0; i < cloud.points.size(); ++i ){
                 x = int(cloud.points[i].x * 1000);
@@ -573,8 +573,6 @@ public:
         double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
         overlap_diff_dev = std::sqrt(sq_sum / v.size());
     }
-
-
     /////////////////     end of Score (similarity assessment)     /////////////////
 
 
