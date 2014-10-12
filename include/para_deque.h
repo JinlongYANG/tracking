@@ -80,7 +80,7 @@ public:
     int size_;
     int max_size_;
 
-    para_deque(const int maximum_size = 5){
+    para_deque(const int maximum_size = 7){
         size_ = 0;
         max_size_ = maximum_size;
         for( int i = 0; i< 27; i++){

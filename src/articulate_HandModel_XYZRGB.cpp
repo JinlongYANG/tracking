@@ -130,7 +130,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     //2. bone length initialization:
     //thumb
     bone_length[0][0] = 0/1000;
-    bone_length[0][1] = 40.1779/1000;
+    bone_length[0][1] = 40.1779/1000 - 0.002;
     bone_length[0][2] = 31.9564/1000;
     bone_length[0][3] = 22.9945/1000;
     //index finger
@@ -162,12 +162,9 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     //palm joints with reference to palm/hand coordinate:
     //palm.thumb
     float delt_y = 0.002;
-    Model_joints[1].at<float>(0,0) = -0.014 - 0.002;
-    Model_joints[1].at<float>(1,0) = -0.053 +delt_y;
-    Model_joints[1].at<float>(2,0) = 0.002;
 
-    Model_joints[1].at<float>(0,0) = -0.014 - 0.002 -0.005;
-    Model_joints[1].at<float>(1,0) = -0.053 +0.01+delt_y;
+    Model_joints[1].at<float>(0,0) = -0.014 - 0.002;
+    Model_joints[1].at<float>(1,0) = -0.053 +0.01+delt_y + 0.005;
     Model_joints[1].at<float>(2,0) = 0.002;
     //palm.index
     Model_joints[6].at<float>(0,0) = -0.014 - 0.002;
@@ -190,7 +187,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     Model_joints[16].at<float>(1,0) = -0.051 + delt_y;
     Model_joints[16].at<float>(2,0) = -0.008;
 
-    Model_joints[17].at<float>(0,0) = 0.020 - 0.002;
+    Model_joints[17].at<float>(0,0) = 0.019 - 0.002;
     Model_joints[17].at<float>(1,0) = 0.018 + delt_y;
     Model_joints[17].at<float>(2,0) = 0.001;
     //palm.pinky
@@ -198,8 +195,8 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     Model_joints[21].at<float>(1,0) = -0.053 + delt_y;
     Model_joints[21].at<float>(2,0) = -0.004;
 
-    Model_joints[22].at<float>(0,0) = 0.042 - 0.002;
-    Model_joints[22].at<float>(1,0) = 0.013 + delt_y;
+    Model_joints[22].at<float>(0,0) = 0.038 - 0.002;
+    Model_joints[22].at<float>(1,0) = 0.014 + delt_y;
     Model_joints[22].at<float>(2,0) = 0;
 
     for(int i = 0; i < 10; i++){
@@ -256,19 +253,11 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     Model_joints[9].at<float>(1,0) = bone_length[1][2];
     Model_joints[10].at<float>(1,0) = bone_length[1][3];
 
-    //    Model_joints[10] = Model_joints[10]+Model_joints[9]+Model_joints[8]+Model_joints[7];
-    //    Model_joints[9] = Model_joints[9]+Model_joints[8]+Model_joints[7];
-    //    Model_joints[8] = Model_joints[8]+Model_joints[7];
-
     //3.2.2 middel to pinky(extrinsic):
     for ( int i = 0; i < 3; ++i){
         Model_joints[i*5+13].at<float>(1,0) = bone_length[2+i][1];
         Model_joints[i*5+14].at<float>(1,0) = bone_length[2+i][2];
         Model_joints[i*5+15].at<float>(1,0) = bone_length[2+i][3];
-
-        //        Model_joints[i*5+15] = Model_joints[i*5+15]+Model_joints[i*5+14]+Model_joints[i*5+13]+Model_joints[i*5+12];
-        //        Model_joints[i*5+14] = Model_joints[i*5+14]+Model_joints[i*5+13]+Model_joints[i*5+12];
-        //        Model_joints[i*5+13] = Model_joints[i*5+13]+Model_joints[i*5+12];
 
     }
 
@@ -276,11 +265,6 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     Model_joints[2].at<float>(1,0) = bone_length[0][1];
     Model_joints[3].at<float>(1,0) = bone_length[0][2];
     Model_joints[4].at<float>(1,0) = bone_length[0][3];
-
-    //    Model_joints[4] = Model_joints[4]+Model_joints[3]+Model_joints[2]+Model_joints[1];
-    //    Model_joints[3] = Model_joints[3]+Model_joints[2]+Model_joints[1];
-    //    Model_joints[2] = Model_joints[2]+Model_joints[1];
-    //    Model_joints[4].copyTo(Model_joints[5]);
 
     palm_model = Mat::zeros(3, 9, CV_32FC1);
 
@@ -293,197 +277,6 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     Model_joints[21].copyTo(palm_model.col(6));
     Model_joints[22].copyTo(palm_model.col(7));
     Model_joints[1].copyTo(palm_model.col(8));
-
-
-    //4 Point Cloud Model:
-    //    float finger_angle_step = 30;
-    //    float xy_relosution = 0.004;
-
-    //4.1 Palm point cloud model:
-    pcl::PointCloud<pcl::PointXYZRGB> palmPointCloud;
-    pcl::PointXYZRGB palmpointXYZRGB;
-    uint8_t r = 100;
-    uint8_t g = 100;
-    uint8_t b = 255;
-    uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
-    palmpointXYZRGB.rgb = *reinterpret_cast<float*>(&rgb);
-    //length = y; width = x
-    float length = -0.041;
-    while(length < 0.038){
-        float width = -0.030-(length/10.0);
-        //left side:
-        float hight_max = 0.01 + (0.04-length)/0.079*0.006;
-        float hight = -hight_max;
-        while(hight < hight_max){
-            palmpointXYZRGB.x = width;
-            palmpointXYZRGB.y = length-0.02;
-            palmpointXYZRGB.z = hight;
-            palmPointCloud.push_back(palmpointXYZRGB);
-            hight += xy_relosution;
-        }
-        //upper and lower sides:
-        while(width < 0.040+length/5.0){
-
-            palmpointXYZRGB.x = width;
-            palmpointXYZRGB.y = length-0.02;
-            palmpointXYZRGB.z = hight_max;
-            palmPointCloud.push_back(palmpointXYZRGB);
-
-            palmpointXYZRGB.x = width;
-            palmpointXYZRGB.y = length-0.02;
-            palmpointXYZRGB.z = -hight_max;
-            if(width <= 0)
-                palmpointXYZRGB.z = -hight_max-0.005*(1+width/(0.030+length/10.0));
-            else
-                palmpointXYZRGB.z = -hight_max-0.005*(1-width/(0.040+length/5.0));
-            palmPointCloud.push_back(palmpointXYZRGB);
-
-
-            width += xy_relosution;
-        }
-        //right side:
-        hight = -hight_max;
-        while(hight < hight_max){
-            palmpointXYZRGB.x = width;
-            palmpointXYZRGB.y = length-0.02;
-            palmpointXYZRGB.z = hight;
-            palmPointCloud.push_back(palmpointXYZRGB);
-            hight += xy_relosution;
-        }
-
-        length += xy_relosution;
-    }
-    //palm front
-    float width = -0.030-(length/10.0);
-    float hight_max = 0.01 + (0.04-length)/0.08*0.006;
-    while(width < 0.040+length/5.0){
-        float hight = 0;
-        if(width <= 0)
-            hight = -hight_max-0.005*(1+width/(0.030+length/10.0));
-        else
-            hight = -hight_max-0.005*(1-width/(0.040+length/5.0));
-        while(hight < hight_max){
-            palmpointXYZRGB.x = width;
-            palmpointXYZRGB.y = length-0.02;
-            palmpointXYZRGB.z = hight;
-            palmPointCloud.push_back(palmpointXYZRGB);
-
-            hight += xy_relosution;
-        }
-        width += xy_relosution;
-    }
-
-    handPointCloudVector.push_back(palmPointCloud);
-
-    //4.2 finger point cloud model:
-    for(int fingerIndex = 0; fingerIndex < 5; fingerIndex++){
-        for(int boneIndex = 1; boneIndex < 4; boneIndex ++){
-            pcl::PointCloud<pcl::PointXYZRGB> bonePointCloud;
-            pcl::PointXYZRGB pointXYZRGB;
-            r = fingerIndex*50+50;
-            g = 255-(boneIndex * 80);
-            b = 0;
-            rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
-            pointXYZRGB.rgb = *reinterpret_cast<float*>(&rgb);
-            //joints:
-            float theta = 0, phi = 0, joint_radius = 0.01-(boneIndex-1)*0.001;
-            if (fingerIndex == 0 && boneIndex == 1)
-                joint_radius = 0.015;
-            if (fingerIndex == 0 && boneIndex == 2)
-                joint_radius = 0.011;
-            if (fingerIndex == 0 && boneIndex == 3)
-                joint_radius = 0.009;
-            if (fingerIndex == 4)
-                joint_radius = joint_radius - 0.001;
-            if( fingerIndex == 0 && boneIndex == 3){
-                theta = 40;
-                while(theta <= 90){
-                    phi = 0;
-                    while(phi < 360){
-                        pointXYZRGB.x = joint_radius * cos(degree2arc(theta)) * cos(degree2arc(phi));
-                        pointXYZRGB.y = joint_radius * cos(degree2arc(theta)) * sin(degree2arc(phi));
-                        pointXYZRGB.z = joint_radius * sin(degree2arc(theta))*0.8;
-                        bonePointCloud.push_back(pointXYZRGB);
-
-                        phi += (30 + theta/2);
-                    }
-                    theta += 10;
-                }
-            }
-            theta = 0;
-            while(theta <= 90){
-                phi = 0;
-                while(phi < 360){
-                    pointXYZRGB.x = joint_radius * cos(degree2arc(theta)) * cos(degree2arc(phi));
-                    pointXYZRGB.y = joint_radius * cos(degree2arc(theta)) * sin(degree2arc(phi));
-                    pointXYZRGB.z = -joint_radius * sin(degree2arc(theta))*0.8;
-                    bonePointCloud.push_back(pointXYZRGB);
-
-                    phi += (30 + theta/2);
-                }
-                theta += 10;
-            }
-
-            //fingers:
-            float y = 0;
-            float fingertip = 0;
-            if (boneIndex == 3)
-                fingertip = 0.006;
-            while(y < bone_length[fingerIndex][boneIndex] - fingertip){
-                pointXYZRGB.y = y;
-
-                float angle = 0;
-                float radius = 0.01-(boneIndex-1)*0.001-0.001/bone_length[fingerIndex][boneIndex]*y;
-                if (fingerIndex == 0 && boneIndex == 1)
-                    radius = 0.015-0.004/bone_length[fingerIndex][boneIndex]*y;
-                if (fingerIndex == 0 && boneIndex == 2)
-                    radius = 0.011-0.002/bone_length[fingerIndex][boneIndex]*y;
-                if (fingerIndex == 0 && boneIndex == 3)
-                    radius = 0.009-0.001/bone_length[fingerIndex][boneIndex]*y;
-                if (fingerIndex == 4)
-                    radius = radius - 0.001;
-                while( angle < 360){
-                    pointXYZRGB.x = radius*sin(degree2arc(angle));
-                    if(fingerIndex == 0 && boneIndex == 3)
-                        pointXYZRGB.z = radius*cos(degree2arc(angle))*(0.8-0.2*(1-(bone_length[0][3]- fingertip-y)/(bone_length[0][3]- fingertip)));
-                    else
-                        pointXYZRGB.z = radius*cos(degree2arc(angle))*0.9;
-                    bonePointCloud.push_back(pointXYZRGB);
-                    angle += finger_angle_step;
-
-                }
-                y += xy_relosution;
-            }
-            //fingertips
-            if(boneIndex == 3){
-
-                float radius = 0.007;
-                if(fingerIndex == 0)
-                    radius = 0.008;
-                if(fingerIndex == 4)
-                    radius = radius - 0.001;
-                float phi = 0; theta = 0;
-                while( theta <= 90){
-                    phi = 0;
-                    while( phi < 360 ){
-                        pointXYZRGB.x = radius * cos(degree2arc(theta)) * cos(degree2arc(phi));
-                        pointXYZRGB.y = radius * sin(degree2arc(theta)) + y;
-                        if(fingerIndex == 0 && boneIndex == 3)
-                            pointXYZRGB.z = radius * cos(degree2arc(theta)) * sin(degree2arc(phi)) *0.6;
-                        else
-                            pointXYZRGB.z = radius * cos(degree2arc(theta)) * sin(degree2arc(phi)) *0.9;
-                        bonePointCloud.push_back(pointXYZRGB);
-
-                        phi += (30 + theta/2);
-                    }
-                    theta += 10;
-                }
-
-            }
-
-            handPointCloudVector.push_back(bonePointCloud);
-        }
-    }
 
     set_parameters();
 
@@ -503,7 +296,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_max[5] = 180;
 
     parameters_min[6] = 0;
-    parameters_max[6] = 60;
+    parameters_max[6] = 50;
     parameters_min[7] = -60;
     parameters_max[7] = 0;
     parameters_min[8] = -10;
@@ -637,6 +430,16 @@ void articulate_HandModel_XYZRGB::set_parameters(){
 void articulate_HandModel_XYZRGB::set_parameters(float para[27]){
     for(int i = 0; i<27; i++)
         parameters[i] = para[i];
+}
+
+void articulate_HandModel_XYZRGB::set_parameters(vector<float> para){
+    if(para.size() == 27){
+        for(int i = 0; i<27; i++)
+            parameters[i] = para[i];
+    }
+    else{
+        ROS_ERROR("Parameter size error!");
+    }
 }
 
 void articulate_HandModel_XYZRGB::get_joints_positions(){
@@ -945,7 +748,7 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
             axis_step.z = step * axis_vector.z + joints_position[jointStart].z;
 
             if(bone_index == 0)
-                radius = 0.015-0.004/bone_length[0][1]*step;
+                radius = 0.01/*+0.001/bone_length[0][1]*step*/;
             else if (bone_index ==1)
                 radius = 0.011 - 0.002/bone_length[0][2]*step;
             else
@@ -1057,7 +860,7 @@ void articulate_HandModel_XYZRGB::samplePointCloud(pcl::PointCloud<pcl::PointXYZ
 
                 radius = 0.01-(bone_index)*0.001-0.001/bone_length[finger_index][bone_index+1]*step;
                 if(finger_index == 4)
-                    radius -= 0.001;
+                    radius -= 0.002;
                 while(theta < 360){
                     float cosT = cos(degree2arc(theta));
                     float sinT = sin(degree2arc(theta));

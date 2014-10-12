@@ -135,6 +135,7 @@ public:
     void check_parameters();
     void set_parameters();
     void set_parameters(float para[27]);
+    void set_parameters(vector<float> para);
     void get_joints_positions();
     void get_handPointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud);
     void samplePointCloud(pcl::PointCloud<pcl::PointXYZRGB> & handPointCloud);
