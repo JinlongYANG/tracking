@@ -99,7 +99,7 @@ public:
                 para_sequence.push_front(new_para);
             }
         }
-        std::cout << "Queue size: " << para_sequence.size() << std::endl;
+        //std::cout << "Queue size: " << para_sequence.size() << std::endl;
 //        for(int i=0; i<para_sequence[0].size(); i++ ){
 //            std::cout << "Para " << i <<": " << para_sequence[0][i] << std::endl;
 //        }

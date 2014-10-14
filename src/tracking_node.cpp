@@ -54,13 +54,12 @@ tracking_Node::tracking_Node(ros::NodeHandle& nh):
 
     timeSynchronizer_.connectInput(hand_kp_Subscriber_, hand_Subscriber_, registered_Depth_Image_Subscriber);
 
-    segmented_hand_ = nh.advertise<sensor_msgs::PointCloud2>("Segmented_Hand",0);
-
     handPublisher_ = nh.advertise<sensor_msgs::PointCloud2>("Hand_cloud",0);
     articulatePublisher_ = nh.advertise<sensor_msgs::PointCloud2>("Articulate",0);
     modelPublisher_ = nh.advertise<sensor_msgs::PointCloud2>("Model_point_cloud",0);
 
     bone_pub_ = nh.advertise<visualization_msgs::Marker>("Bones", 0);
+    bone_leap_pub_ = nh.advertise<visualization_msgs::Marker>("Leap_Articulate", 0);
     //leap_articulate_pub_ = nh.advertise<visualization_msgs::Marker>("Leap_Articulate",0);
 
     timeSynchronizer_.registerCallback(boost::bind(&tracking_Node::syncedCallback, this, _1, _2, _3));
@@ -146,11 +145,7 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
 
         //********************************************************//
         //1.2 Do segmentation
-        // Segmentation result in pcl::PointCloud<pcl::PointXYZRGB> Segmented_hand_cloud
-        pcl::PointCloud<pcl::PointXYZRGB> Segmented_hand_cloud;
-        vector<int> label;
-        //GridGraphSeqeratePalm(hand_kp, handcloud, Segmented_hand_cloud, label);
-        NearestNeighbour(hand_kp, handcloud, Segmented_hand_cloud, label);
+
         //******** 1.2 done  **************//
         ros::Time time4 = ros::Time::now();
 
@@ -164,7 +159,6 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         std::cout << time1-time0 << " seconds: " << "from callback begin to try." << std::endl;
         std::cout << time2-time1 << " seconds: " <<"message from transfer." <<std::endl;
         std::cout << time3-time2 << " seconds: " << "Picking hand points." << std::endl;
-        std::cout << time4-time3 << " seconds: NN Segmentation." << std::endl;
         std::cout << time5-time4 << " seconds: Ray tracking for Observation." << std::endl;
 
         pcl::PointCloud<pcl::PointXYZRGB> modelPointCloud;
@@ -222,12 +216,12 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
             float Opt_Score_overlapratio1 = 100000, Opt_Score_aver_overlapdiff = 100000, Opt_Score_overlapratio2 = 10000;
             for(int annealing_iterator = 0; annealing_iterator < 3; annealing_iterator++){
                 float annealing_factor = pow(0.6, annealing_iterator);
-                for(int parameterDimension = 0; parameterDimension < 27; ++parameterDimension){
+                for(int parameterDimension = -1; parameterDimension < 27; ++parameterDimension){
                     float para[27];
                     float para_suboptimal[27];
 
                     //very first (initialization of the whole programme)
-                    if((!seq)&&(!annealing_iterator)&&(!parameterDimension)){
+                    if((!seq)&&(!annealing_iterator)&&(parameterDimension == -1)){
                         float temp_parameters[27]= {0,0,0,
                                                     -30,0,-10,
                                                     10,-30,0,10,
@@ -243,10 +237,9 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                             para[i] = temp_parameters[i];
                             para_suboptimal[i] = temp_parameters[i];
                         }
-
                     }
                     //use last frame result for current frame initialization
-                    else if ((!annealing_iterator)&&(!parameterDimension)){
+                    else if ((!annealing_iterator)&&(parameterDimension == -1)){
                         for(int i = 0; i<27;i++){
                             para[i] = parameter_que[0].para_sequence_smoothed[0][i] + det_para[i];
                             para_suboptimal[i] = para[i];
@@ -271,8 +264,10 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     //#pragma omp for
                     for (int iterator = 0; iterator < max_iterator; iterator ++){
                         //******** 2.1 generate Hypothesis point cloud *******//
-
-                        if(parameterDimension < 3){
+                        if(parameterDimension == -1){
+                            max_iterator = 1;
+                        }
+                        else if(parameterDimension < 3){
                             para[parameterDimension] += (rand()%translation_mode/1000.0/max_iterator+2*translation_step/max_iterator*iterator-translation_step)*annealing_factor;
                         }
                         else if (parameterDimension < 5){
@@ -416,12 +411,12 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                 float Opt_Score_overlapratio1 = 100000, Opt_Score_aver_overlapdiff = 100000, Opt_Score_overlapratio2 = 10000;
                 for(int annealing_iterator = 0; annealing_iterator < 3; annealing_iterator++){
                     float annealing_factor = pow(0.6, annealing_iterator);
-                    for(int parameterDimension = 0; parameterDimension < 27; ++parameterDimension){
+                    for(int parameterDimension = -1; parameterDimension < 27; ++parameterDimension){
                         float para[27];
                         float para_suboptimal[27];
 
                         //very first (initialization of the whole programme)
-                        if((!seq)&&(!annealing_iterator)&&(!parameterDimension)){
+                        if((!seq)&&(!annealing_iterator)&&(parameterDimension == -1)){
                             float temp_parameters[27]= {0,0,0,
                                                         -30,0,-10,
                                                         10,-30,0,10,
@@ -437,10 +432,9 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                                 para[i] = temp_parameters[i];
                                 para_suboptimal[i] = temp_parameters[i];
                             }
-
                         }
                         //use last frame result for current frame initialization
-                        else if ((!annealing_iterator)&&(!parameterDimension)){
+                        else if ((!annealing_iterator)&&(parameterDimension == -1)){
                             for(int i = 0; i<27;i++){
                                 para[i] = parameter_que[particle_index].para_sequence_smoothed[0][i] + det_para[i];
                                 para_suboptimal[i] = para[i];
@@ -464,8 +458,10 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
 
                         for (int iterator = 0; iterator < max_iterator; iterator ++){
                             //******** 2.1 generate Hypothesis point cloud *******//
-
-                            if(parameterDimension < 3){
+                            if (parameterDimension == -1){
+                                max_iterator = 1;
+                            }
+                            else if(parameterDimension < 3){
                                 para[parameterDimension] += (rand()%translation_mode/1000.0/max_iterator+2*translation_step/max_iterator*iterator-translation_step)*annealing_factor;
                             }
                             else if (parameterDimension < 5){
@@ -623,22 +619,29 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         else if (tracking_mode == 2){
             Point3d errors[PARTICLE_NUM];
 
-            omp_set_num_threads(8);
+            ros::Time thread_begin = ros::Time::now();
+
+            omp_set_num_threads(PARTICLE_NUM);
 #pragma omp parallel
             {
                 int  id = omp_get_thread_num();
+                ros::Time thread_assigned = ros::Time::now();
                 articulate_HandModel_XYZRGB openMP_hand;
+                ros::Time thread_handModel = ros::Time::now();
                 pcl::PointCloud<pcl::PointXYZRGB> openMP_modelPointCloud;
                 float optimal_para[27];
                 float Opt_Score_overlapratio1 = 100000, Opt_Score_aver_overlapdiff = 100000, Opt_Score_overlapratio2 = 10000;
                 for(int annealing_iterator = 0; annealing_iterator < 3; annealing_iterator++){
                     float annealing_factor = pow(0.6, annealing_iterator);
-                    for(int parameterDimension = 0; parameterDimension < 27; ++parameterDimension){
+                    int parameterDimension = 0;
+                    if (!annealing_factor)
+                        parameterDimension = -1;
+                    for(; parameterDimension < 27; ++parameterDimension){
                         float para[27];
                         float para_suboptimal[27];
 
                         //very first (initialization of the whole programme)
-                        if((!seq)&&(!annealing_iterator)&&(!parameterDimension)){
+                        if((!seq)&&(!annealing_iterator)&&(parameterDimension == -1)){
                             float temp_parameters[27]= {0,0,0,
                                                         -30,0,-10,
                                                         10,-30,0,10,
@@ -652,10 +655,9 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                                 para[i] = temp_parameters[i];
                                 para_suboptimal[i] = temp_parameters[i];
                             }
-
                         }
                         //use last frame result for current frame initialization
-                        else if ((!annealing_iterator)&&(!parameterDimension)){
+                        else if ((!annealing_iterator)&&(parameterDimension == -1)){
                             for(int i = 0; i<27;i++){
                                 para[i] = parameter_que[id].para_sequence_smoothed[0][i] + det_para[i];
                                 para_suboptimal[i] = para[i];
@@ -679,8 +681,10 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
 
                         for (int iterator = 0; iterator < max_iterator; iterator ++){
                             //******** 2.1 generate Hypothesis point cloud *******//
-
-                            if(parameterDimension < 3){
+                            if( parameterDimension == -1){
+                                max_iterator = 1;
+                            }
+                            else if(parameterDimension < 3){
                                 para[parameterDimension] += (rand()%translation_mode/1000.0/max_iterator+2*translation_step/max_iterator*iterator-translation_step)*annealing_factor;
                             }
                             else if (parameterDimension < 5){
@@ -737,12 +741,12 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
 
                             //generate hypo
                             openMP_hand.set_parameters(para);
+                            //ros::Time a = ros::Time::now();
                             openMP_hand.get_joints_positions();
                             //ros::Time time_begin = ros::Time::now();
                             //MyHand.get_handPointCloud(modelPointCloud);
                             openMP_hand.samplePointCloud(openMP_modelPointCloud);
                             //ros::Time time_end = ros::Time::now();
-                            //std::cout<<"Duration: "<< time_end-time_begin << std::endl;
                             //******** 2.1 done ****************//
 
                             //******** 2.2 Ray tracing for Hypothesis ********//
@@ -750,7 +754,12 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                            // pcl::PointCloud<pcl::PointXYZRGB> visibleModelPointCloud;
                             //Ray_tracing_OrthognalProjection(modelPointCloud, imageSize, resolution, visiblityMap_Hypo, visibleModelPointCloud);
                             Ray_tracing_OrthognalProjection(openMP_modelPointCloud, imageSize, resolution, visiblityMap_Hypo);
+                            //ros::Time time_h = ros::Time::now();
                             //******** 2.2 done *******************//
+//                            std::cout <<"Duration 1: " << time_begin - a <<std::endl;
+//                            std::cout<<"Duration 2: "<< time_end-time_begin << std::endl;
+//                            std::cout<<"Duration 3: "<< time_h-time_end << std::endl;
+//                            std::cout<<"Duration a: "<< time_h-a << std::endl;
 
                             //******** 2.3 Score (similarity assessment) ******//
                             float overlap, overall_diff, overlap_diff, overlap_obs, overlap_hyp;
@@ -789,6 +798,11 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                 errors[id].y = Opt_Score_overlapratio2;
                 errors[id].z = Opt_Score_aver_overlapdiff;
 
+                ros::Time thread_end = ros::Time::now();
+               std::cout << id <<"Thread alloc: " << thread_assigned - thread_begin <<std::endl;
+               std::cout << id <<"Thread model: " << thread_handModel - thread_assigned <<std::endl;
+               std::cout << id <<"Thread total: " << thread_end - thread_begin <<std::endl;
+
             }
 
             //Find the best particle out of all
@@ -807,15 +821,15 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                     worst_particle_index = particle_index;
                 }
             }
-            std::cout<<"Best particle index: " << best_particle_index << std::endl;
-            std::cout<<"Best particle error: " << errors[best_particle_index].x << ", " <<
-                       errors[best_particle_index].y << ", " << errors[best_particle_index].z <<
-                       " " << best_particle_error<<std::endl;
+//            std::cout<<"Best particle index: " << best_particle_index << std::endl;
+//            std::cout<<"Best particle error: " << errors[best_particle_index].x << ", " <<
+//                       errors[best_particle_index].y << ", " << errors[best_particle_index].z <<
+//                       " " << best_particle_error<<std::endl;
 
-            std::cout<<"Worst particle index: " << worst_particle_index << std::endl;
-            std::cout<<"Worst particle error: " << errors[worst_particle_index].x << ", " <<
-                       errors[worst_particle_index].y << ", " << errors[worst_particle_index].z <<
-                       " " << worst_particle_error<<std::endl;
+//            std::cout<<"Worst particle index: " << worst_particle_index << std::endl;
+//            std::cout<<"Worst particle error: " << errors[worst_particle_index].x << ", " <<
+//                       errors[worst_particle_index].y << ", " << errors[worst_particle_index].z <<
+//                       " " << worst_particle_error<<std::endl;
 
             //reset the worst:
             if(worst_particle_error > 5.8)
@@ -872,13 +886,6 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         hand_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
         handPublisher_.publish(hand_cloud_msg);
 
-        //ROS_INFO("Prepare Segmented Hand Cloud");
-        sensor_msgs::PointCloud2 segmented_hand_cloud_msg;
-        toROSMsg(Segmented_hand_cloud,segmented_hand_cloud_msg);
-        segmented_hand_cloud_msg.header.frame_id=hand_kp_pter->header.frame_id;
-        segmented_hand_cloud_msg.header.stamp = hand_kp_pter->header.stamp;
-        segmented_hand_.publish(segmented_hand_cloud_msg);
-
         //ROS_INFO("Prepare Articulation");
         sensor_msgs::PointCloud2 cloud_msg_articulation;
         toROSMsg(articulation,cloud_msg_articulation);
@@ -905,9 +912,9 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         bone.scale.x = 0.001;
         bone.color.a = 1.0;
         bone.color.g = 1.0;
+        geometry_msgs::Point p2;
         for(int finger = 0; finger <5; finger++){
             for(int i = 1; i< 5; i++){
-                geometry_msgs::Point p2;
                 p2.x = articulation.points[5*finger+i].x;
                 p2.y = articulation.points[5*finger+i].y;
                 p2.z = articulation.points[5*finger+i].z;
@@ -920,7 +927,6 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         }
         for(int i = 0; i< 2; i++){
             for(int j = 0; j< 3; j++){
-                geometry_msgs::Point p2;
                 p2.x = articulation.points[6+5*j+i].x;
                 p2.y = articulation.points[6+5*j+i].y;
                 p2.z = articulation.points[6+5*j+i].z;
@@ -931,7 +937,6 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
                 bone.points.push_back(p2);
             }
         }
-        geometry_msgs::Point p2;
         p2.x = articulation.points[1].x;
         p2.y = articulation.points[1].y;
         p2.z = articulation.points[1].z;
@@ -940,7 +945,61 @@ void tracking_Node::syncedCallback(const PointCloud2ConstPtr& hand_kp_pter, cons
         p2.y = articulation.points[6].y;
         p2.z = articulation.points[6].z;
         bone.points.push_back(p2);
+//        p2.x = articulation.points[1].x;
+//        p2.y = articulation.points[1].y;
+//        p2.z = articulation.points[1].z;
+//        bone.points.push_back(p2);
+//        p2.x = articulation.points[21].x;
+//        p2.y = articulation.points[21].y;
+//        p2.z = articulation.points[21].z;
+//        bone.points.push_back(p2);
         bone_pub_.publish( bone );
+
+        //ROS_INFO("Prepare Finger Position from Leap Sensor");
+        visualization_msgs::Marker bone_leap;
+        bone_leap.header.frame_id = hand_kp_pter->header.frame_id;
+        bone_leap.header.stamp = hand_kp_pter->header.stamp;
+        bone_leap.ns = "finger_leap";
+        bone_leap.type = visualization_msgs::Marker::LINE_LIST;
+        bone_leap.id = 0;
+        bone_leap.action = visualization_msgs::Marker::ADD;
+        bone_leap.pose.orientation.w = 1.0;
+        bone_leap.scale.x = 0.001;
+        bone_leap.color.a = 1.0;
+        bone_leap.color.r = 1.0;
+        for(int finger = 0; finger <5; finger++){
+            for(int i = 1; i< 5; i++){
+                p2.x = hand_kp.points[6*finger+1+i].x;
+                p2.y = hand_kp.points[6*finger+1+i].y;
+                p2.z = hand_kp.points[6*finger+1+i].z;
+                bone_leap.points.push_back(p2);
+                p2.x = hand_kp.points[6*finger+i+2].x;
+                p2.y = hand_kp.points[6*finger+i+2].y;
+                p2.z = hand_kp.points[6*finger+i+2].z;
+                bone_leap.points.push_back(p2);
+            }
+        }
+        for(int i = 0; i< 2; i++){
+            for(int j = 0; j< 3; j++){
+                p2.x = hand_kp.points[8+6*j+i].x;
+                p2.y = hand_kp.points[8+6*j+i].y;
+                p2.z = hand_kp.points[8+6*j+i].z;
+                bone_leap.points.push_back(p2);
+                p2.x = hand_kp.points[8+6*j+6+i].x;
+                p2.y = hand_kp.points[8+6*j+6+i].y;
+                p2.z = hand_kp.points[8+6*j+6+i].z;
+                bone_leap.points.push_back(p2);
+            }
+        }
+        p2.x = hand_kp.points[2].x;
+        p2.y = hand_kp.points[2].y;
+        p2.z = hand_kp.points[2].z;
+        bone_leap.points.push_back(p2);
+        p2.x = hand_kp.points[8].x;
+        p2.y = hand_kp.points[8].y;
+        p2.z = hand_kp.points[8].z;
+        bone_leap.points.push_back(p2);
+        bone_leap_pub_.publish( bone_leap );
 
         ros::Time Publish_end = ros::Time::now();
         std::cout << Publish_end-Publish_begin << " seconds: Publish messages." << std::endl;

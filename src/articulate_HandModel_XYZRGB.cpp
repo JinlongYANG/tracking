@@ -295,10 +295,10 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_min[5] = -180;
     parameters_max[5] = 180;
 
-    parameters_min[6] = 0;
+    parameters_min[6] = 5;
     parameters_max[6] = 50;
     parameters_min[7] = -60;
-    parameters_max[7] = 0;
+    parameters_max[7] = -10;
     parameters_min[8] = -10;
     parameters_max[8] = 70;
     parameters_min[9] = -10;
@@ -344,7 +344,7 @@ articulate_HandModel_XYZRGB::articulate_HandModel_XYZRGB(const float finger_angl
     parameters_max[26] = 90;
 
 
-    std::cout << "Model is ready!" << std::endl;
+    //std::cout << "Model is ready!" << std::endl;
 
 }
 

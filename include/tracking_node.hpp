@@ -63,10 +63,9 @@ private:
 
     
     ros::Publisher articulatePublisher_;
-    //ros::Publisher leap_articulate_pub_;
     ros::Publisher handPublisher_;
-    ros::Publisher segmented_hand_;
     ros::Publisher bone_pub_;
+    ros::Publisher bone_leap_pub_;
     ros::Publisher modelPublisher_;
 
 public:
